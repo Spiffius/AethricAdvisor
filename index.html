@@ -47,6 +47,10 @@
     <script type="text/babel">
         const { useState, useEffect, useContext, createContext, useRef, useCallback } = React;
 
+        // ============ PASSWORD - Change this to set your app password ============
+        const APP_PASSWORD = 'AethricApp!984';
+        const SESSION_AUTH_KEY = 'aethric_authenticated';
+
         // ============ CONSTANTS ============
         const FACTIONS = {
             'Knights of Inferno': { emoji: '🔥', bonus: '+25% fire damage, -20% fire damage taken', element: 'Fire' },
@@ -318,6 +322,79 @@ ${profile.name === 'Spiffius' ? 'CRITICAL: Always check elemental coverage for W
         };
 
         // ============ COMPONENTS ============
+
+        // Password Gate Component
+        const PasswordGate = ({ children }) => {
+            const [isAuthenticated, setIsAuthenticated] = useState(() => {
+                return sessionStorage.getItem(SESSION_AUTH_KEY) === 'true';
+            });
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState('');
+            const [isShaking, setIsShaking] = useState(false);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (password === APP_PASSWORD) {
+                    sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
+                    setIsAuthenticated(true);
+                    setError('');
+                } else {
+                    setError('Incorrect password. Access denied.');
+                    setIsShaking(true);
+                    setTimeout(() => setIsShaking(false), 500);
+                    setPassword('');
+                }
+            };
+
+            if (isAuthenticated) {
+                return children;
+            }
+
+            return (
+                <div className="fixed inset-0 bg-obsidian flex items-center justify-center z-[9999]">
+                    <div className={`bg-charcoal border-2 border-darkred/50 rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl ${isShaking ? 'animate-shake' : ''}`}>
+                        <div className="text-center mb-8">
+                            <h1 className="font-cinzel text-3xl text-gold mb-2">AethricAdvisor</h1>
+                            <p className="text-gray-400 text-sm">Enter password to access the sanctum</p>
+                        </div>
+                        <form onSubmit={handleSubmit}>
+                            <div className="mb-4">
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                                    placeholder="Enter password..."
+                                    autoFocus
+                                    className="w-full bg-slate border border-gray-700 rounded-lg px-4 py-3 text-center text-lg focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/50 placeholder-gray-500"
+                                />
+                            </div>
+                            {error && (
+                                <div className="mb-4 p-3 bg-red-900/30 border border-red-700/50 rounded text-red-400 text-sm text-center">
+                                    {error}
+                                </div>
+                            )}
+                            <button
+                                type="submit"
+                                className="w-full py-3 bg-darkred/70 hover:bg-darkred text-white font-cinzel rounded-lg transition-colors glow-red"
+                            >
+                                Enter the Codex
+                            </button>
+                        </form>
+                        <div className="mt-6 text-center">
+                            <span className="text-gray-600 text-xs">Build-aware gear and skill optimizer</span>
+                        </div>
+                    </div>
+                    <style>{`
+                        @keyframes shake {
+                            0%, 100% { transform: translateX(0); }
+                            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+                            20%, 40%, 60%, 80% { transform: translateX(5px); }
+                        }
+                        .animate-shake { animation: shake 0.5s ease-in-out; }
+                    `}</style>
+                </div>
+            );
+        };
 
         // Header Component
         const Header = () => {
@@ -1720,9 +1797,11 @@ Return a dated summary of what's changed and any recommendations.`
         // ============ RENDER ============
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(
-            <AppProvider>
-                <App />
-            </AppProvider>
+            <PasswordGate>
+                <AppProvider>
+                    <App />
+                </AppProvider>
+            </PasswordGate>
         );
     </script>
 </body>
