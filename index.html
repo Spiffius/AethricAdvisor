@@ -436,37 +436,124 @@ ${profile.name === 'Spiffius' ? 'CRITICAL: Always check elemental coverage for W
             );
         };
 
-        // Tab Navigation
+        // Tab Navigation - Bottom on mobile, top on desktop
         const TabNav = () => {
             const { activeTab, setActiveTab } = useContext(AppContext);
             const tabs = [
-                { id: 'profile', label: 'Profile' },
-                { id: 'gear', label: 'Gear' },
-                { id: 'skills', label: 'Skills' },
-                { id: 'loadout', label: 'Loadout' },
-                { id: 'meta', label: 'Meta' }
+                { id: 'profile', label: 'Profile', icon: '👤' },
+                { id: 'gear', label: 'Gear', icon: '⚔️' },
+                { id: 'skills', label: 'Skills', icon: '✨' },
+                { id: 'loadout', label: 'Loadout', icon: '🎒' },
+                { id: 'meta', label: 'Meta', icon: '📊' }
             ];
 
             return (
-                <nav className="bg-slate border-b border-darkred/30 sticky top-[88px] z-40">
-                    <div className="max-w-6xl mx-auto px-4">
-                        <div className="flex overflow-x-auto scrollbar-dark">
+                <>
+                    {/* Desktop: Top navigation */}
+                    <nav className="hidden md:block bg-slate border-b border-darkred/30 sticky top-[88px] z-40">
+                        <div className="max-w-6xl mx-auto px-4">
+                            <div className="flex overflow-x-auto scrollbar-dark">
+                                {tabs.map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors ${
+                                            activeTab === tab.id
+                                                ? 'text-gold border-b-2 border-gold'
+                                                : 'text-gray-400 hover:text-white'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </nav>
+                    {/* Mobile: Bottom navigation */}
+                    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-obsidian border-t border-darkred/50 z-40 pb-safe">
+                        <div className="flex justify-around">
                             {tabs.map(tab => (
                                 <button
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
-                                    className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors ${
+                                    className={`flex-1 py-3 flex flex-col items-center gap-1 transition-colors ${
                                         activeTab === tab.id
-                                            ? 'text-gold border-b-2 border-gold'
-                                            : 'text-gray-400 hover:text-white'
+                                            ? 'text-gold'
+                                            : 'text-gray-500'
                                     }`}
                                 >
-                                    {tab.label}
+                                    <span className="text-lg">{tab.icon}</span>
+                                    <span className="text-xs">{tab.label}</span>
                                 </button>
                             ))}
                         </div>
-                    </div>
-                </nav>
+                    </nav>
+                </>
+            );
+        };
+
+        // Floating Action Button for quick screenshot evaluation
+        const FloatingActionButton = ({ onFileSelect }) => {
+            const fileInputRef = useRef(null);
+
+            const handleClick = () => {
+                fileInputRef.current?.click();
+            };
+
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    onFileSelect(file);
+                }
+                e.target.value = '';
+            };
+
+            return (
+                <>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="hidden"
+                    />
+                    <button
+                        onClick={handleClick}
+                        className="md:hidden fixed bottom-20 right-4 z-50 bg-darkred hover:bg-red-800 text-white rounded-full p-4 shadow-lg glow-red flex flex-col items-center gap-1 transition-transform active:scale-95"
+                        style={{ minWidth: '72px' }}
+                    >
+                        <span className="text-2xl">📷</span>
+                        <span className="text-xs font-medium whitespace-nowrap">Evaluate</span>
+                    </button>
+                </>
+            );
+        };
+
+        // Copy to Clipboard Button
+        const CopyButton = ({ text, label = 'Copy' }) => {
+            const [copied, setCopied] = useState(false);
+
+            const handleCopy = async () => {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                } catch (err) {
+                    console.error('Failed to copy:', err);
+                }
+            };
+
+            return (
+                <button
+                    onClick={handleCopy}
+                    className={`px-3 py-1.5 text-xs rounded transition-colors ${
+                        copied
+                            ? 'bg-green-900/50 text-green-400'
+                            : 'bg-slate hover:bg-gray-700 text-gray-400'
+                    }`}
+                >
+                    {copied ? '✓ Copied' : `📋 ${label}`}
+                </button>
             );
         };
 
@@ -581,7 +668,7 @@ ${profile.name === 'Spiffius' ? 'CRITICAL: Always check elemental coverage for W
                         />
                     ) : type === 'number' ? (
                         <input
-                            type="number"
+                            type="number" inputMode="numeric"
                             value={editData[field]}
                             onChange={(e) => setEditData(prev => ({ ...prev, [field]: parseInt(e.target.value) || 0 }))}
                             disabled={!isEditing}
@@ -603,7 +690,7 @@ ${profile.name === 'Spiffius' ? 'CRITICAL: Always check elemental coverage for W
                 <div>
                     <label className="block text-xs text-gray-500 mb-1">{label}</label>
                     <input
-                        type="number"
+                        type="number" inputMode="numeric"
                         value={editData.currentStats?.[stat] || 0}
                         onChange={(e) => setEditData(prev => ({
                             ...prev,
@@ -672,13 +759,13 @@ ${profile.name === 'Spiffius' ? 'CRITICAL: Always check elemental coverage for W
                             <InputField label="Game" field="game" options={GAMES} />
                             <InputField label="Class & Specialization" field="classSpec" />
                             <div className="grid grid-cols-2 gap-4">
-                                <InputField label="Tier" field="tier" type="number" />
-                                <InputField label="Level" field="level" type="number" />
+                                <InputField label="Tier" field="tier" type="number" inputMode="numeric" />
+                                <InputField label="Level" field="level" type="number" inputMode="numeric" />
                             </div>
                             <InputField label="Faction" field="faction" options={Object.keys(FACTIONS)} />
                             <InputField label="Playstyle Goal" field="playstyle" options={PLAYSTYLES} />
                             <InputField label="Endgame Target Class" field="endgameTarget" />
-                            <InputField label="Orns Available" field="ornsAvailable" type="number" />
+                            <InputField label="Orns Available" field="ornsAvailable" type="number" inputMode="numeric" />
                         </div>
 
                         <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
@@ -951,47 +1038,47 @@ Return your response as JSON with this structure:
                             <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-4">
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Tier</label>
-                                    <input type="number" value={manualGear.tier} onChange={(e) => setManualGear(prev => ({ ...prev, tier: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualGear.tier} onChange={(e) => setManualGear(prev => ({ ...prev, tier: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Level</label>
-                                    <input type="number" value={manualGear.level} onChange={(e) => setManualGear(prev => ({ ...prev, level: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualGear.level} onChange={(e) => setManualGear(prev => ({ ...prev, level: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Attack</label>
-                                    <input type="number" value={manualGear.attack} onChange={(e) => setManualGear(prev => ({ ...prev, attack: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualGear.attack} onChange={(e) => setManualGear(prev => ({ ...prev, attack: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Defense</label>
-                                    <input type="number" value={manualGear.defense} onChange={(e) => setManualGear(prev => ({ ...prev, defense: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualGear.defense} onChange={(e) => setManualGear(prev => ({ ...prev, defense: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Resistance</label>
-                                    <input type="number" value={manualGear.resistance} onChange={(e) => setManualGear(prev => ({ ...prev, resistance: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualGear.resistance} onChange={(e) => setManualGear(prev => ({ ...prev, resistance: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">HP</label>
-                                    <input type="number" value={manualGear.hp} onChange={(e) => setManualGear(prev => ({ ...prev, hp: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualGear.hp} onChange={(e) => setManualGear(prev => ({ ...prev, hp: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Mana</label>
-                                    <input type="number" value={manualGear.mana} onChange={(e) => setManualGear(prev => ({ ...prev, mana: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualGear.mana} onChange={(e) => setManualGear(prev => ({ ...prev, mana: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Ward %</label>
-                                    <input type="number" value={manualGear.ward} onChange={(e) => setManualGear(prev => ({ ...prev, ward: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualGear.ward} onChange={(e) => setManualGear(prev => ({ ...prev, ward: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Magic</label>
-                                    <input type="number" value={manualGear.magic} onChange={(e) => setManualGear(prev => ({ ...prev, magic: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualGear.magic} onChange={(e) => setManualGear(prev => ({ ...prev, magic: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Dexterity</label>
-                                    <input type="number" value={manualGear.dexterity} onChange={(e) => setManualGear(prev => ({ ...prev, dexterity: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualGear.dexterity} onChange={(e) => setManualGear(prev => ({ ...prev, dexterity: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Foresight</label>
-                                    <input type="number" value={manualGear.foresight} onChange={(e) => setManualGear(prev => ({ ...prev, foresight: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualGear.foresight} onChange={(e) => setManualGear(prev => ({ ...prev, foresight: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-gray-500 mb-1">Element</label>
@@ -1055,9 +1142,15 @@ Return your response as JSON with this structure:
 
                     {result && (
                         <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4 space-y-4">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
                                 <h3 className="font-cinzel text-lg text-gold">{result.item_name || 'Evaluation Result'}</h3>
-                                <VerdictBadge verdict={result.verdict} color={result.color_rating} />
+                                <div className="flex items-center gap-2">
+                                    <CopyButton
+                                        text={`${result.item_name || 'Item'}\nVerdict: ${result.verdict}${result.flags?.length ? '\nFlags: ' + result.flags.join(', ') : ''}${result.synergy_analysis ? '\nSynergy: ' + result.synergy_analysis : ''}${result.ability_analysis ? '\nAbility: ' + result.ability_analysis : ''}${result.upgrade_priority ? '\nPriority: ' + result.upgrade_priority + '/5' : ''}${result.rationale ? '\n\n' + result.rationale : ''}`}
+                                        label="Copy"
+                                    />
+                                    <VerdictBadge verdict={result.verdict} color={result.color_rating} />
+                                </div>
                             </div>
 
                             {result.flags && result.flags.length > 0 && (
@@ -1316,15 +1409,15 @@ Return JSON:
                             <div className="grid grid-cols-3 gap-4 mb-4">
                                 <div>
                                     <label className="block text-sm text-gray-400 mb-1">Mana Cost</label>
-                                    <input type="number" value={manualSkill.manaCost} onChange={(e) => setManualSkill(prev => ({ ...prev, manaCost: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualSkill.manaCost} onChange={(e) => setManualSkill(prev => ({ ...prev, manaCost: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-sm text-gray-400 mb-1">Power Min</label>
-                                    <input type="number" value={manualSkill.powerMin} onChange={(e) => setManualSkill(prev => ({ ...prev, powerMin: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualSkill.powerMin} onChange={(e) => setManualSkill(prev => ({ ...prev, powerMin: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm" />
                                 </div>
                                 <div>
                                     <label className="block text-sm text-gray-400 mb-1">Power Max</label>
-                                    <input type="number" value={manualSkill.powerMax} onChange={(e) => setManualSkill(prev => ({ ...prev, powerMax: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm" />
+                                    <input type="number" inputMode="numeric" value={manualSkill.powerMax} onChange={(e) => setManualSkill(prev => ({ ...prev, powerMax: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm" />
                                 </div>
                             </div>
 
@@ -1350,9 +1443,15 @@ Return JSON:
 
                     {result && (
                         <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4 space-y-4">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
                                 <h3 className="font-cinzel text-lg text-gold">{result.skill_name || 'Evaluation Result'}</h3>
-                                <VerdictBadge verdict={result.verdict} color={result.color_rating} />
+                                <div className="flex items-center gap-2">
+                                    <CopyButton
+                                        text={`${result.skill_name || 'Skill'}\nVerdict: ${result.verdict}${result.build_fit_analysis ? '\nBuild Fit: ' + result.build_fit_analysis : ''}${result.elemental_coverage ? '\nElemental: ' + result.elemental_coverage : ''}${result.rotation_placement ? '\nRotation: ' + result.rotation_placement : ''}${result.replaces_what ? '\nReplaces: ' + result.replaces_what : ''}${result.priority ? '\nPriority: ' + result.priority + '/5' : ''}${result.rationale ? '\n\n' + result.rationale : ''}`}
+                                        label="Copy"
+                                    />
+                                    <VerdictBadge verdict={result.verdict} color={result.color_rating} />
+                                </div>
                             </div>
 
                             {result.build_fit_analysis && (
@@ -1767,7 +1866,70 @@ Return a dated summary of what's changed and any recommendations.`
 
         // ============ MAIN APP ============
         const App = () => {
-            const { activeTab } = useContext(AppContext);
+            const { activeTab, setActiveTab, apiKey, activeProfile, addEvaluation } = useContext(AppContext);
+            const [fabLoading, setFabLoading] = useState(false);
+            const [fabResult, setFabResult] = useState(null);
+            const [fabError, setFabError] = useState('');
+            const [showFabModal, setShowFabModal] = useState(false);
+
+            const handleFabFileSelect = async (file) => {
+                if (!apiKey) {
+                    setFabError('Please enter your API key in the Profile tab first');
+                    setShowFabModal(true);
+                    return;
+                }
+
+                setFabLoading(true);
+                setFabError('');
+                setFabResult(null);
+                setShowFabModal(true);
+
+                try {
+                    const reader = new FileReader();
+                    reader.onload = async (e) => {
+                        const imageData = e.target.result;
+                        const base64Data = imageData.split(',')[1];
+                        const mediaType = imageData.split(';')[0].split(':')[1];
+
+                        const systemPrompt = buildSystemPrompt(activeProfile);
+                        const messages = [{
+                            role: 'user',
+                            content: [
+                                { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
+                                { type: 'text', text: `Extract all visible stats from this gear screenshot and evaluate it for my build. Return your response as JSON with this structure:
+{
+  "item_name": "string",
+  "extracted_stats": { "tier": number, "slot": "string", "quality": "string", "level": number, "attack": number, "defense": number, "resistance": number, "hp": number, "mana": number, "ward": number, "magic": number, "dexterity": number, "foresight": number, "element": "string", "ability": "string", "useableBy": "string" },
+  "verdict": "Upgrade|Sidegrade|Downgrade|Wrong class|Situational",
+  "color_rating": "green|yellow|red",
+  "stat_comparison": [{"stat": "string", "current": number, "new": number, "change": "string"}],
+  "synergy_analysis": "string",
+  "flags": ["string"],
+  "ability_analysis": "string",
+  "upgrade_priority": number,
+  "rationale": "string"
+}` }
+                            ]
+                        }];
+
+                        const response = await callClaudeAPI(apiKey, messages, systemPrompt, true);
+                        let textContent = response.content.find(c => c.type === 'text')?.text || '';
+                        const jsonMatch = textContent.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) {
+                            const parsed = JSON.parse(jsonMatch[0]);
+                            setFabResult(parsed);
+                            addEvaluation({ type: 'gear', ...parsed });
+                        } else {
+                            setFabResult({ rationale: textContent, verdict: 'Unknown', color_rating: 'yellow' });
+                        }
+                        setFabLoading(false);
+                    };
+                    reader.readAsDataURL(file);
+                } catch (err) {
+                    setFabError(err.message);
+                    setFabLoading(false);
+                }
+            };
 
             const renderTab = () => {
                 switch (activeTab) {
@@ -1781,15 +1943,78 @@ Return a dated summary of what's changed and any recommendations.`
             };
 
             return (
-                <div className="min-h-screen bg-charcoal">
+                <div className="min-h-screen bg-charcoal pb-20 md:pb-0">
                     <Header />
                     <TabNav />
                     <main className="max-w-6xl mx-auto px-4 py-6">
                         {renderTab()}
                     </main>
-                    <footer className="border-t border-darkred/30 py-4 text-center text-xs text-gray-500">
-                        AethricAdvisor • Build-aware gear and skill optimizer
+                    <footer className="border-t border-darkred/30 py-4 text-center text-xs text-gray-500 mb-16 md:mb-0">
+                        AethricAdvisor - Build-aware gear and skill optimizer
                     </footer>
+
+                    {/* Floating Action Button */}
+                    <FloatingActionButton onFileSelect={handleFabFileSelect} />
+
+                    {/* FAB Quick Evaluation Modal */}
+                    {showFabModal && (
+                        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4" onClick={() => !fabLoading && setShowFabModal(false)}>
+                            <div className="bg-charcoal border border-darkred/50 rounded-lg p-4 max-w-md w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-cinzel text-gold">Quick Evaluation</h3>
+                                    {!fabLoading && (
+                                        <button onClick={() => setShowFabModal(false)} className="text-gray-400 hover:text-white text-xl">&times;</button>
+                                    )}
+                                </div>
+
+                                {fabLoading && <LoadingSpinner message="Analyzing screenshot..." />}
+
+                                {fabError && (
+                                    <div className="bg-red-900/30 border border-red-700/50 rounded p-3 text-red-400 text-sm">
+                                        {fabError}
+                                    </div>
+                                )}
+
+                                {fabResult && (
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between flex-wrap gap-2">
+                                            <span className="font-medium">{fabResult.item_name}</span>
+                                            <VerdictBadge verdict={fabResult.verdict} color={fabResult.color_rating} />
+                                        </div>
+
+                                        {fabResult.flags?.length > 0 && (
+                                            <div className="flex flex-wrap gap-1">
+                                                {fabResult.flags.map((flag, i) => (
+                                                    <span key={i} className="px-2 py-0.5 bg-darkred/30 text-xs rounded">{flag}</span>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {fabResult.synergy_analysis && (
+                                            <p className="text-sm text-gray-300">{fabResult.synergy_analysis}</p>
+                                        )}
+
+                                        {fabResult.rationale && (
+                                            <p className="text-sm text-gray-400 border-t border-gray-700 pt-2">{fabResult.rationale}</p>
+                                        )}
+
+                                        <div className="flex gap-2 pt-2">
+                                            <CopyButton
+                                                text={`${fabResult.item_name || 'Item'}\nVerdict: ${fabResult.verdict}${fabResult.flags?.length ? '\nFlags: ' + fabResult.flags.join(', ') : ''}${fabResult.synergy_analysis ? '\n' + fabResult.synergy_analysis : ''}${fabResult.rationale ? '\n\n' + fabResult.rationale : ''}`}
+                                                label="Copy Result"
+                                            />
+                                            <button
+                                                onClick={() => { setActiveTab('gear'); setShowFabModal(false); }}
+                                                className="px-3 py-1.5 text-xs bg-slate hover:bg-gray-700 rounded text-gray-300"
+                                            >
+                                                Go to Gear Tab
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
