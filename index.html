@@ -53,7 +53,7 @@
         const { useState, useEffect, useContext, createContext, useRef, useCallback } = React;
 
         // ============ BUILD INFO ============
-        const BUILD_TIMESTAMP = '2025-03-17T04:35:00Z';
+        const BUILD_TIMESTAMP = '2026-03-17T14:42:00Z';
 
         // ============ PASSWORD ============
         const APP_PASSWORD = 'AethricApp!984';
@@ -89,7 +89,7 @@
         const EMPTY_GEAR = {
             name: '', quality: 'Legendary', tier: 'T7', level: '', slot: 'Weapon', useableBy: 'All Classes',
             element: 'None', abilityName: '', abilityDesc: '',
-            stats: { attack: 0, defense: 0, resistance: 0, hp: 0, mana: 0, ward: 0, magic: 0, dexterity: 0, foresight: 0, crit: 0 },
+            stats: { attack: '', defense: '', resistance: '', hp: '', mana: '', ward: '', magic: '', dexterity: '', foresight: '', crit: '' },
             statMods: { attack: '+', defense: '+', resistance: '+', hp: '+', mana: '+', ward: '+', magic: '+', dexterity: '+', foresight: '+', crit: '+' },
             specialProperties: [], materials: '', notes: ''
         };
@@ -405,8 +405,10 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
 
         // ============ GEAR FORM ============
         const GearForm = ({ gear, setGear, onSubmit, submitLabel = 'Evaluate', isLoading = false }) => {
-            const updateStat = (stat, value) => setGear(prev => ({ ...prev, stats: { ...prev.stats, [stat]: parseInt(value) || 0 } }));
+            const updateStat = (stat, value) => setGear(prev => ({ ...prev, stats: { ...prev.stats, [stat]: value === '' ? '' : parseInt(value) } }));
             const updateMod = (stat, mod) => setGear(prev => ({ ...prev, statMods: { ...prev.statMods, [stat]: mod } }));
+            const isAccessory = gear.slot === 'Accessory';
+            const isLevelValid = isAccessory || (gear.level !== '' && gear.level >= 1 && gear.level <= 10);
             const toggleProperty = (prop) => {
                 setGear(prev => ({
                     ...prev,
@@ -440,17 +442,7 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div>
-                            <label className="block text-xs text-gray-500 mb-1">Level (1-10)</label>
-                            <input type="number" inputMode="numeric" min="1" max="10" step="1" value={gear.level}
-                                onChange={(e) => setGear(prev => ({ ...prev, level: e.target.value === '' ? '' : parseInt(e.target.value) }))}
-                                placeholder="1-10"
-                                className={`w-full bg-charcoal border rounded px-2 py-2 text-sm ${gear.level !== '' && (gear.level < 1 || gear.level > 10) ? 'border-red-500' : 'border-gray-700'}`} />
-                            {gear.level !== '' && (gear.level < 1 || gear.level > 10) && (
-                                <p className="text-red-400 text-xs mt-1">Level must be between 1 and 10</p>
-                            )}
-                        </div>
+                    <div className={`grid grid-cols-2 ${isAccessory ? 'md:grid-cols-3' : 'md:grid-cols-4'} gap-3`}>
                         <div>
                             <label className="block text-xs text-gray-500 mb-1">Slot</label>
                             <select value={gear.slot} onChange={(e) => setGear(prev => ({ ...prev, slot: e.target.value }))}
@@ -458,6 +450,18 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
                                 {SLOTS.map(s => <option key={s}>{s}</option>)}
                             </select>
                         </div>
+                        {!isAccessory && (
+                            <div>
+                                <label className="block text-xs text-gray-500 mb-1">Level (1-10)</label>
+                                <input type="number" inputMode="numeric" min="1" max="10" step="1" value={gear.level}
+                                    onChange={(e) => setGear(prev => ({ ...prev, level: e.target.value === '' ? '' : parseInt(e.target.value) }))}
+                                    placeholder="1-10"
+                                    className={`w-full bg-charcoal border rounded px-2 py-2 text-sm ${gear.level !== '' && (gear.level < 1 || gear.level > 10) ? 'border-red-500' : 'border-gray-700'}`} />
+                                {gear.level !== '' && (gear.level < 1 || gear.level > 10) && (
+                                    <p className="text-red-400 text-xs mt-1">Level must be between 1 and 10</p>
+                                )}
+                            </div>
+                        )}
                         <div>
                             <label className="block text-xs text-gray-500 mb-1">Useable By</label>
                             <select value={gear.useableBy} onChange={(e) => setGear(prev => ({ ...prev, useableBy: e.target.value }))}
@@ -498,7 +502,7 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
                                         <option>-</option>
                                     </select>
                                     <input type="number" inputMode="numeric" value={gear.stats[stat]} onChange={(e) => updateStat(stat, e.target.value)}
-                                        className="flex-1 bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm w-16" />
+                                        placeholder="0" className="flex-1 bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm w-16" />
                                     <span className="text-xs text-gray-500 w-12 truncate">{STAT_LABELS[stat]}</span>
                                 </div>
                             ))}
@@ -532,7 +536,7 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
                     </div>
 
                     {onSubmit && (
-                        <button onClick={onSubmit} disabled={isLoading || !gear.name || gear.level === '' || gear.level < 1 || gear.level > 10}
+                        <button onClick={onSubmit} disabled={isLoading || !gear.name || !isLevelValid}
                             className="w-full py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50">
                             {isLoading ? 'Evaluating...' : submitLabel}
                         </button>
@@ -744,9 +748,12 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
                 { key: 'accessory2', label: 'Accessory 2' }
             ];
 
+            const slotKeyToSlot = { head: 'Head', torso: 'Torso', legs: 'Legs', weapon: 'Weapon', offhand: 'Off-hand', accessory1: 'Accessory', accessory2: 'Accessory' };
+
             const startEditGear = (slotKey) => {
                 const current = activeProfile.loadout[slotKey];
-                setTempGear(current ? { ...current } : { ...EMPTY_GEAR });
+                const defaultSlot = slotKeyToSlot[slotKey] || 'Weapon';
+                setTempGear(current ? { ...current } : { ...EMPTY_GEAR, slot: defaultSlot });
                 setEditingSlot(slotKey);
             };
 
@@ -823,23 +830,27 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
                     </div>
 
                     {/* Gear Edit Modal */}
-                    {editingSlot && (
-                        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setEditingSlot(null)}>
-                            <div className="bg-charcoal border border-darkred/50 rounded-lg p-4 max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="font-cinzel text-gold">Edit {gearSlots.find(s => s.key === editingSlot)?.label}</h3>
-                                    <button onClick={() => setEditingSlot(null)} className="text-gray-400 hover:text-white text-xl">&times;</button>
-                                </div>
-                                <GearForm gear={tempGear} setGear={setTempGear} />
-                                <div className="flex gap-2 mt-4">
-                                    <button onClick={saveGear}
-                                        disabled={!tempGear.name || tempGear.level === '' || tempGear.level < 1 || tempGear.level > 10}
-                                        className="flex-1 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50">Save to Loadout</button>
-                                    <button onClick={() => setEditingSlot(null)} className="px-4 py-2 bg-gray-700 rounded">Cancel</button>
+                    {editingSlot && (() => {
+                        const isAccessorySlot = editingSlot === 'accessory1' || editingSlot === 'accessory2' || tempGear.slot === 'Accessory';
+                        const isLevelValidForSave = isAccessorySlot || (tempGear.level !== '' && tempGear.level >= 1 && tempGear.level <= 10);
+                        return (
+                            <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setEditingSlot(null)}>
+                                <div className="bg-charcoal border border-darkred/50 rounded-lg p-4 max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-cinzel text-gold">Edit {gearSlots.find(s => s.key === editingSlot)?.label}</h3>
+                                        <button onClick={() => setEditingSlot(null)} className="text-gray-400 hover:text-white text-xl">&times;</button>
+                                    </div>
+                                    <GearForm gear={tempGear} setGear={setTempGear} />
+                                    <div className="flex gap-2 mt-4">
+                                        <button onClick={saveGear}
+                                            disabled={!tempGear.name || !isLevelValidForSave}
+                                            className="flex-1 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50">Save to Loadout</button>
+                                        <button onClick={() => setEditingSlot(null)} className="px-4 py-2 bg-gray-700 rounded">Cancel</button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {/* Skills Section */}
                     <h3 className="font-cinzel text-lg text-gold mt-6">Skill Loadout (12 slots)</h3>
