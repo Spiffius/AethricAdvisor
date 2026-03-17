@@ -53,7 +53,7 @@
         const { useState, useEffect, useContext, createContext, useRef, useCallback } = React;
 
         // ============ BUILD INFO ============
-        const BUILD_TIMESTAMP = '2026-03-17T14:42:00Z';
+        const BUILD_TIMESTAMP = '2026-03-17T15:08:00Z';
 
         // ============ PASSWORD ============
         const APP_PASSWORD = 'AethricApp!984';
@@ -94,9 +94,13 @@
             specialProperties: [], materials: '', notes: ''
         };
 
+        const SKILL_CAUSES = ['Poisoned', 'Bleeding', 'Burning', 'Frozen', 'Paralyzed', 'Stunned', 'Blind', 'Asleep', 'Blight', 'Petrified', 'Confused', 'Cursed', 'Rot', 'Lulled', 'Windswept', 'Att↓', 'Def↓', 'Mag↓', 'Res↓', 'Dex↓'];
+        const SKILL_GIVES = ['Att↑', 'Def↑', 'Mag↑', 'Res↑', 'Dex↑', 'Ward↑', 'Crit↑', 'Foresight↑', 'HP Regen', 'Mana Regen', 'Dmg↑', 'Fire Aligned', 'Ice Aligned', 'Lightning Aligned', 'Earth Aligned', 'Holy Aligned', 'Dark Aligned'];
+        const SKILL_CURES = ['Poisoned', 'Bleeding', 'Burning', 'Frozen', 'Paralyzed', 'Stunned', 'Blind', 'Asleep', 'Blight', 'Petrified', 'Confused', 'Cursed', 'Rot', 'All Status Effects'];
+
         const EMPTY_SKILL = {
-            name: '', type: 'Spell', element: 'Fire', manaCost: 0, powerMin: 0, powerMax: 0, hitCount: 1,
-            effect: '', sourceClass: '', notes: ''
+            name: '', type: 'Spell', element: 'Fire', manaCost: '', powerMin: '', powerMax: '', hitCount: '',
+            causes: [], gives: [], cures: [], sourceClass: '', notes: ''
         };
 
         // ============ DEFAULT PROFILES ============
@@ -547,6 +551,48 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
 
         // ============ SKILL FORM ============
         const SkillForm = ({ skill, setSkill, onSubmit, submitLabel = 'Evaluate', isLoading = false }) => {
+            const [expandedSections, setExpandedSections] = useState({ causes: false, gives: false, cures: false });
+
+            const toggleSection = (section) => setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+
+            const toggleEffect = (field, value) => {
+                setSkill(prev => ({
+                    ...prev,
+                    [field]: prev[field]?.includes(value)
+                        ? prev[field].filter(v => v !== value)
+                        : [...(prev[field] || []), value]
+                }));
+            };
+
+            const CollapsibleSection = ({ id, label, options, field }) => {
+                const selected = skill[field] || [];
+                const isExpanded = expandedSections[id];
+                return (
+                    <div className="border border-gray-700 rounded">
+                        <button type="button" onClick={() => toggleSection(id)}
+                            className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-slate/30">
+                            <span className={selected.length > 0 ? 'text-gold' : 'text-gray-400'}>
+                                {label} {selected.length > 0 && `(${selected.length})`}
+                            </span>
+                            <span className="text-gray-500">{isExpanded ? '▼' : '▶'}</span>
+                        </button>
+                        {isExpanded && (
+                            <div className="px-3 pb-3 pt-1 border-t border-gray-700">
+                                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                    {options.map(opt => (
+                                        <label key={opt} className="flex items-center gap-1 text-xs cursor-pointer">
+                                            <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggleEffect(field, opt)}
+                                                className="rounded border-gray-600 bg-charcoal text-gold focus:ring-gold w-3 h-3" />
+                                            <span className={selected.includes(opt) ? 'text-gold' : 'text-gray-400'}>{opt}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
             return (
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -574,30 +620,34 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
                             <label className="block text-xs text-gray-500 mb-1">Mana Cost</label>
-                            <input type="number" inputMode="numeric" value={skill.manaCost} onChange={(e) => setSkill(prev => ({ ...prev, manaCost: parseInt(e.target.value) || 0 }))}
-                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
+                            <input type="number" inputMode="numeric" value={skill.manaCost}
+                                onChange={(e) => setSkill(prev => ({ ...prev, manaCost: e.target.value === '' ? '' : parseInt(e.target.value) }))}
+                                placeholder="0" className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
                         </div>
                         <div>
                             <label className="block text-xs text-gray-500 mb-1">Power Min</label>
-                            <input type="number" inputMode="numeric" value={skill.powerMin} onChange={(e) => setSkill(prev => ({ ...prev, powerMin: parseInt(e.target.value) || 0 }))}
+                            <input type="number" inputMode="numeric" value={skill.powerMin}
+                                onChange={(e) => setSkill(prev => ({ ...prev, powerMin: e.target.value === '' ? '' : parseInt(e.target.value) }))}
                                 placeholder="0" className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
                         </div>
                         <div>
                             <label className="block text-xs text-gray-500 mb-1">Power Max</label>
-                            <input type="number" inputMode="numeric" value={skill.powerMax} onChange={(e) => setSkill(prev => ({ ...prev, powerMax: parseInt(e.target.value) || 0 }))}
+                            <input type="number" inputMode="numeric" value={skill.powerMax}
+                                onChange={(e) => setSkill(prev => ({ ...prev, powerMax: e.target.value === '' ? '' : parseInt(e.target.value) }))}
                                 placeholder="0" className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
                         </div>
                         <div>
                             <label className="block text-xs text-gray-500 mb-1">Hit Count</label>
-                            <input type="number" inputMode="numeric" min="1" value={skill.hitCount} onChange={(e) => setSkill(prev => ({ ...prev, hitCount: Math.max(1, parseInt(e.target.value) || 1) }))}
-                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
+                            <input type="number" inputMode="numeric" value={skill.hitCount}
+                                onChange={(e) => setSkill(prev => ({ ...prev, hitCount: e.target.value === '' ? '' : parseInt(e.target.value) }))}
+                                placeholder="1" className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-xs text-gray-500 mb-1">Effect Description</label>
-                        <textarea value={skill.effect} onChange={(e) => setSkill(prev => ({ ...prev, effect: e.target.value }))} rows={2}
-                            placeholder="What does this skill do?" className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:border-gold" />
+                    <div className="space-y-2">
+                        <CollapsibleSection id="causes" label="Causes" options={SKILL_CAUSES} field="causes" />
+                        <CollapsibleSection id="gives" label="Gives" options={SKILL_GIVES} field="gives" />
+                        <CollapsibleSection id="cures" label="Cures" options={SKILL_CURES} field="cures" />
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
