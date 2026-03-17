@@ -53,7 +53,7 @@
         const { useState, useEffect, useContext, createContext, useRef, useCallback } = React;
 
         // ============ BUILD INFO ============
-        const BUILD_TIMESTAMP = '2026-03-17T16:30:00Z';
+        const BUILD_TIMESTAMP = '2026-03-17T17:05:00Z';
 
         // ============ PASSWORD ============
         const APP_PASSWORD = 'AethricApp!984';
@@ -367,16 +367,19 @@ Return ONLY a JSON array of skill objects, no other text.`;
             return response.json();
         };
 
-        const callLoadoutAdvisorAPI = async (apiKey, profile, skillDatabase, scenario, enemyElement) => {
+        const callLoadoutAdvisorAPI = async (apiKey, profile, skillDatabase, scenario, enemyElement, skillSlots) => {
             const faction = FACTIONS[profile.faction];
             const systemPrompt = `You are AethricAdvisor, a combat loadout advisor for Hero of Aethric / Orna: The GPS RPG.
 
 Given the player's character profile, available skills, current gear, and the selected combat scenario, recommend an optimal skill loadout and turn-by-turn combat sequence.
 
+IMPORTANT: The player has ${skillSlots} skill slots available. You MUST recommend exactly ${skillSlots} skills to fill all slots.
+
 Your response must be a JSON object with:
 {
   "recommended_loadout": [
     { "slot": 1, "skill_name": "skill name", "role": "Ward/Buff/Debuff/Damage/etc", "reason": "brief reason" }
+    // ... exactly ${skillSlots} entries, one per slot
   ],
   "turn_sequence": [
     { "turn": 1, "action": "skill name", "rationale": "why this turn" }
@@ -390,6 +393,7 @@ Your response must be a JSON object with:
 }
 
 Rules:
+- Fill ALL ${skillSlots} skill slots with recommendations
 - For Dungeon/Raid/Boss: Ward first, then buffs, then debuffs, then damage
 - For Overworld: fewest turns to kill, AoE if available
 - For PvP: debuffs first, then buffs, then damage
@@ -410,13 +414,14 @@ Current Stats: ${JSON.stringify(profile.currentStats)}
 
 Scenario: ${scenario}
 Enemy Element: ${enemyElement || 'Unknown'}
+Skill Slots Available: ${skillSlots}
 
 Available Skills (${skillDatabase.length} total):
 ${JSON.stringify(skillDatabase, null, 2)}
 
 ${profile.metaNotes ? `Meta Notes:\n${profile.metaNotes}` : ''}
 
-Recommend the optimal loadout and turn sequence for this scenario.`;
+Recommend exactly ${skillSlots} skills to fill all available slots, plus the optimal turn sequence for this scenario.`;
 
             const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
@@ -721,10 +726,13 @@ Recommend the optimal loadout and turn sequence for this scenario.`;
         };
 
         // ============ LOADOUT ADVISOR TAB (AI-POWERED) ============
+        const SKILL_SLOT_OPTIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12];
+
         const AdvisorTab = () => {
             const { activeProfile, apiKey, saveRecommendation } = useContext(AppContext);
             const [scenario, setScenario] = useState('Dungeon');
             const [enemyElement, setEnemyElement] = useState('None');
+            const [skillSlots, setSkillSlots] = useState(8);
             const [isLoading, setIsLoading] = useState(false);
             const [error, setError] = useState('');
             const [result, setResult] = useState(null);
@@ -744,7 +752,7 @@ Recommend the optimal loadout and turn sequence for this scenario.`;
                 setResult(null);
 
                 try {
-                    const response = await callLoadoutAdvisorAPI(apiKey, activeProfile, skillDatabase, scenario, enemyElement !== 'None' ? enemyElement : null);
+                    const response = await callLoadoutAdvisorAPI(apiKey, activeProfile, skillDatabase, scenario, enemyElement !== 'None' ? enemyElement : null, skillSlots);
                     const textContent = response.content.find(c => c.type === 'text')?.text || '';
                     const jsonMatch = textContent.match(/\{[\s\S]*\}/);
                     if (jsonMatch) {
@@ -772,7 +780,7 @@ Recommend the optimal loadout and turn sequence for this scenario.`;
 
                     {/* Scenario Selection */}
                     <div className="bg-gradient-to-br from-slate/60 to-obsidian/80 border border-gold/30 rounded-lg p-4">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                             <div>
                                 <label className="block text-xs text-gray-500 mb-1">Scenario</label>
                                 <select value={scenario} onChange={(e) => setScenario(e.target.value)}
@@ -781,6 +789,13 @@ Recommend the optimal loadout and turn sequence for this scenario.`;
                                 </select>
                             </div>
                             <div>
+                                <label className="block text-xs text-gray-500 mb-1">Skill Slots</label>
+                                <select value={skillSlots} onChange={(e) => setSkillSlots(parseInt(e.target.value))}
+                                    className="w-full bg-charcoal border border-gold/30 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold">
+                                    {SKILL_SLOT_OPTIONS.map(n => <option key={n} value={n}>{n} slots</option>)}
+                                </select>
+                            </div>
+                            <div className="col-span-2 md:col-span-1">
                                 <label className="block text-xs text-gray-500 mb-1">Enemy Element (optional)</label>
                                 <select value={enemyElement} onChange={(e) => setEnemyElement(e.target.value)}
                                     className="w-full bg-charcoal border border-gold/30 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold">
