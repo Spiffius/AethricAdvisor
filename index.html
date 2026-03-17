@@ -39,6 +39,8 @@
         .glow-red { box-shadow: 0 0 10px rgba(139, 0, 0, 0.5); }
         @keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
         .animate-pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); } 20%, 40%, 60%, 80% { transform: translateX(5px); } }
+        .animate-shake { animation: shake 0.5s ease-in-out; }
     </style>
 </head>
 <body class="bg-charcoal text-white font-inter min-h-screen">
@@ -47,36 +49,56 @@
     <script type="text/babel">
         const { useState, useEffect, useContext, createContext, useRef, useCallback } = React;
 
-        // ============ PASSWORD - Change this to set your app password ============
+        // ============ PASSWORD ============
         const APP_PASSWORD = 'AethricApp!984';
         const SESSION_AUTH_KEY = 'aethric_authenticated';
 
         // ============ CONSTANTS ============
         const FACTIONS = {
-            'Knights of Inferno': { emoji: '🔥', bonus: '+25% fire damage, -20% fire damage taken', element: 'Fire' },
-            'Earthen Legion': { emoji: '🌍', bonus: '+25% earth damage, -20% earth damage taken', element: 'Earth' },
-            'Stormforce': { emoji: '⚡', bonus: '+25% lightning damage, -20% lightning damage taken', element: 'Lightning' },
-            'Frozenguard': { emoji: '❄️', bonus: '+25% ice damage, -20% ice damage taken', element: 'Ice' }
+            'Knights of Inferno': { emoji: '🔥', element: 'Fire', bonus: '+25% fire, -20% fire taken' },
+            'Earthen Legion': { emoji: '🌍', element: 'Earth', bonus: '+25% earth, -20% earth taken' },
+            'Stormforce': { emoji: '⚡', element: 'Lightning', bonus: '+25% lightning, -20% lightning taken' },
+            'Frozenguard': { emoji: '❄️', element: 'Ice', bonus: '+25% ice, -20% ice taken' }
         };
 
         const GAMES = ['Hero of Aethric', 'Orna: The GPS RPG'];
         const PLAYSTYLES = ['Physical DPS', 'Tank', 'Mage DPS', 'Hybrid', 'Endgame Raid'];
-        const SLOTS = ['Weapon', 'Off-hand', 'Head', 'Torso', 'Legs', 'Accessory 1', 'Accessory 2'];
         const QUALITIES = ['Broken', 'Poor', 'Common', 'Superior', 'Famed', 'Legendary', 'Ornate'];
-        const ELEMENTS = ['None', 'Fire', 'Water', 'Earth', 'Lightning', 'Holy', 'Dark', 'Arcane'];
-        const SKILL_TYPES = ['Active Skill', 'Passive Ability', 'Spell', 'Ward Skill', 'Buff', 'Debuff', 'Cleanse'];
-        const USEABLE_BY = ['All', 'Warrior', 'Mage', 'Thief', 'Melee'];
-
-        const LOADING_MESSAGES = [
-            "Consulting the Codex...",
-            "Checking the Runeshop...",
-            "Asking the Archduid...",
-            "Deciphering ancient runes...",
-            "Communing with the spirits...",
-            "Analyzing the ether..."
+        const TIERS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10'];
+        const SLOTS = ['Weapon', 'Off-hand', 'Head', 'Torso', 'Legs', 'Accessory'];
+        const SLOT_KEYS = ['weapon', 'offhand', 'head', 'torso', 'legs', 'accessory1', 'accessory2'];
+        const USEABLE_BY = ['All Classes', 'Warrior Classes', 'Mage Classes', 'Thief Classes', 'Melee Classes'];
+        const ELEMENTS = ['None', 'Fire', 'Water', 'Ice', 'Lightning', 'Earth', 'Holy', 'Dark', 'Arcane'];
+        const SKILL_TYPES = ['Active Skill', 'Passive Ability', 'Spell', 'Ward Skill', 'Buff', 'Debuff', 'Cleanse', 'Multi-hit'];
+        const SKILL_ELEMENTS = ['None', 'Fire', 'Ice', 'Lightning', 'Earth', 'Holy', 'Dark', 'Arcane', 'Non-elemental', 'Physical'];
+        const SPECIAL_PROPERTIES = [
+            'Causes Bleeding', 'Causes Poison', 'Causes Stun', 'Causes Blind', 'Causes Blight',
+            'Gives Att↑', 'Gives Def↑', 'Gives Mag↑', 'Gives Ward↑', 'Gold Bonus', 'Orn Bonus'
         ];
+        const STATS = ['attack', 'defense', 'resistance', 'hp', 'mana', 'ward', 'magic', 'dexterity', 'foresight', 'crit'];
+        const STAT_LABELS = { attack: 'Attack', defense: 'Defense', resistance: 'Resistance', hp: 'HP', mana: 'Mana', ward: 'Ward%', magic: 'Magic', dexterity: 'Dexterity', foresight: 'Foresight', crit: 'Crit%' };
+
+        const LOADING_MESSAGES = ["Consulting the Codex...", "Analyzing the runes...", "Comparing stats..."];
+
+        const EMPTY_GEAR = {
+            name: '', quality: 'Legendary', tier: 'T7', level: 1, slot: 'Weapon', useableBy: 'All Classes',
+            element: 'None', abilityName: '', abilityDesc: '',
+            stats: { attack: 0, defense: 0, resistance: 0, hp: 0, mana: 0, ward: 0, magic: 0, dexterity: 0, foresight: 0, crit: 0 },
+            statMods: { attack: '+', defense: '+', resistance: '+', hp: '+', mana: '+', ward: '+', magic: '+', dexterity: '+', foresight: '+', crit: '+' },
+            specialProperties: [], materials: '', notes: ''
+        };
+
+        const EMPTY_SKILL = {
+            name: '', type: 'Spell', element: 'Fire', manaCost: 0, powerMin: 0, powerMax: 0, hitCount: 1,
+            effect: '', sourceClass: '', notes: ''
+        };
 
         // ============ DEFAULT PROFILES ============
+        const createDefaultLoadout = () => ({
+            head: null, torso: null, legs: null, weapon: null, offhand: null, accessory1: null, accessory2: null,
+            skills: Array(12).fill(null)
+        });
+
         const DEFAULT_PROFILES = [
             {
                 id: 'biffius-default',
@@ -87,39 +109,13 @@
                 level: 150,
                 faction: 'Knights of Inferno',
                 playstyle: 'Endgame Raid',
-                endgameTarget: 'Gilgamesh (Spiked Shield — tank hits, reflect damage back)',
-                buildNotes: "Pure physical warrior on the Valor path toward Gilgamesh. Spiked Shield endgame identity means maximising Defense and Ward is the long-term goal. Fire-imbued weapons preferred for faction bonus — main weapon will be Legendary Axe of Tiamat (fire axe, T7). Ornate High Fomorian Sword (T7, Att 448) is current main weapon at L6, being replaced by Tiamat axe. Legendary Bone Shield (off-hand, Bastion ability — grants temporary defense and Ward for 3 turns) is essential and must never be replaced purely on stats. Inquisitor spec gives: Smite (Power 2615-3661, blinds and stuns), Blessed Shield (greatly increases Def and Res temporarily), Cleanse (cures status ailments + boosts Def/Res), Inquest (greatly increases crit rate), Rebuke (hinders enemy magic), Beastslayer (great damage vs wild beasts).",
-                currentStats: {
-                    hp: 4452, ward: 3005, attack: 1086, defense: 1689,
-                    resistance: 148, dexterity: 148, foresight: 340, crit: 5
-                },
-                gear: {
-                    head: { name: 'Legendary Colossal Helmet L4', stats: 'Def 426, Res -60', notes: 'PROBLEM PIECE — negative Res' },
-                    torso: { name: 'Legendary Colossal Armor L3', stats: 'Def 373, Res -58', notes: 'PROBLEM PIECE — negative Res. Legendary High Draconian Armor L7 upgrading — likely replacement.' },
-                    legs: { name: 'Legendary Orichalcum Leggings L3', stats: 'Def 419, Res 52, Mag -36', notes: '' },
-                    weapon: { name: 'Ornate High Fomorian Sword L6', stats: 'Att 448', notes: 'Being replaced by Tiamat axe' },
-                    offhand: { name: 'Superior Balin\'s Left', stats: 'Att 14, Ward 21%', notes: 'Low quality, replace when better drops. Legendary Bone Shield L7 upgrading — will return to off-hand slot when done.' },
-                    accessory1: { name: 'Ornate Troll\'s Charm', stats: 'Broad stat boosts', notes: 'Adequate for now' },
-                    accessory2: { name: 'Ornate Troll\'s Charm', stats: 'Broad stat boosts', notes: 'Adequate for now' }
-                },
-                knownWeaknesses: "Resistance is critically low at 148 due to Colossal gear giving negative Res penalties. Boss magical ultimates and raid special attacks are the primary threat. Must prioritise Res when evaluating new head and torso pieces even at the cost of some Defense. Any item that further reduces Resistance should be flagged as dangerous regardless of other stats.",
-                skillLoadout: [
-                    { name: 'Swordplay', description: 'Multi-hit physical, 814-1357 x3' },
-                    { name: 'Firestrike III', description: 'Fire, 2172' },
-                    { name: 'Icestrike III', description: 'Ice, 2172' },
-                    { name: 'Earthstrike III', description: 'Earth, 2172' },
-                    { name: 'Lightningstrike III', description: 'Lightning, 2172' },
-                    { name: 'Mighty Bastion', description: 'Ward restore, use first every dungeon floor' },
-                    { name: 'Cleanse', description: 'Status cure + Def/Res boost' },
-                    { name: 'Rampart III', description: 'Defensive buff' },
-                    { name: 'Cleansing Strikes', description: 'Multi-hit with cleanse, 868-1411 x3' }
-                ],
-                combatRotation: "Turn 1 Mighty Bastion (establish Ward), Turn 2 Rampart III (boost defenses), Turn 3+ elemental strikes cycling for damage. Use Cleanse when status-afflicted. Use Smite for high-value targets.",
-                upgradePriorities: "Bone Shield to L10, Tiamat Axe to L10, replace Colossal Helmet with balanced T7 head piece, upgrade Draconian Armor and compare to Colossal Armor.",
+                endgameTarget: 'Gilgamesh (Spiked Shield)',
+                knownWeaknesses: 'Resistance critically low at 148. Prioritise Res over Def for head/torso.',
+                currentStats: { hp: 4452, ward: 3005, attack: 1086, defense: 1689, resistance: 148, dexterity: 148, foresight: 340, crit: 5 },
+                loadout: createDefaultLoadout(),
                 ornsAvailable: 0,
                 metaNotes: '',
-                lastMetaUpdate: null,
-                lastLoadoutUpdate: new Date().toISOString()
+                lastMetaUpdate: null
             },
             {
                 id: 'spiffius-default',
@@ -131,41 +127,12 @@
                 faction: 'Knights of Inferno',
                 playstyle: 'Mage DPS',
                 endgameTarget: 'Omnimancer',
-                buildNotes: "Pure mage build. Key passive: Weaved Elemancy — damage increases when cycling different elemental spells in sequence. Must hit multiple elements per combat for full damage. Magus spec gives 25% spell cost reduction and Great Meditation skill — essential for mana sustainability. Fire faction bonus means Multi-flame and Wildfire II are priority damage spells. Arcane Slime follower currently equipped (provides Arcana/Arcana II buffs). Twilight Wisp is the target follower upgrade (T7, 300,000 Orns — in stock check periodically). Ornate Black Witch Staff (T7, Mag 525, Dark imbued, L7) is main weapon — excellent, keep upgrading to L10. Ornate Witch's Scroll off-hand (Mana 153, Ward 23%, Foresight 46, Read Scroll II ability) — good mage off-hand. Bone Shield (Bastion ability) used in dungeon loadout for Ward restoration.",
-                currentStats: {
-                    hp: 0, ward: 0, attack: 0, defense: 0,
-                    resistance: 0, dexterity: 0, foresight: 0, crit: 0, mana: 0, magic: 0
-                },
-                gear: {
-                    head: { name: 'Legendary Aaru Circlet L7', stats: 'Mana 231, Def 90, Res 341', notes: 'Good mage headpiece' },
-                    torso: { name: 'High Fomorian Robe L9', stats: 'Def 76, Res 299', notes: 'Nearly maxed, good' },
-                    legs: { name: 'Legendary Dagda Boots', stats: 'Def 161, Res 161, Dex 12, Ward 2%, Arcane imbued', notes: '' },
-                    weapon: { name: 'Ornate Black Witch Staff L7', stats: 'Mag 525, Dark imbued, 4 adornment slots', notes: 'Excellent — priority upgrade to L10' },
-                    offhand: { name: 'Ornate Witch\'s Scroll', stats: 'Mana 153, Ward 23%, Foresight 46, Read Scroll II ability', notes: '' },
-                    accessory1: { name: 'Superior Troll\'s Charm', stats: 'Low quality T4', notes: 'WEAK LINK — priority replacement with T7 Legendary/Ornate' },
-                    accessory2: { name: 'Troll\'s Charm (L)', stats: 'Low quality T4', notes: 'WEAK LINK — priority replacement with T7 Legendary/Ornate' }
-                },
-                knownWeaknesses: "Defense is low for a mage (expected) but Ward compensates. Accessories are significantly undertiered at T4 — replacing both with T7 equivalents is the single biggest available upgrade. Dark-imbued staff doesn't provide fire faction bonus on weapon damage but fire spells still benefit. Mana management important — Magus spec helps but dungeon runs can drain mana on long floors.",
-                skillLoadout: [
-                    { name: 'Golem\'s Fortitude', description: 'Def/Res buff, cast Turn 1' },
-                    { name: 'Sorrow III', description: 'Magic debuff on enemy, cast Turn 2' },
-                    { name: 'Multi-flame', description: 'Fire x3, 894-1533, faction bonus' },
-                    { name: 'Wildfire II', description: 'Fire single, 1789' },
-                    { name: 'Multi-frost', description: 'Ice x3, 894-1533' },
-                    { name: 'Frost IV', description: 'Ice single, 1917' },
-                    { name: 'Multi-spark', description: 'Lightning x3, 894-1533' },
-                    { name: 'Multi-tremor', description: 'Earth x3, 894-1533' },
-                    { name: 'Faith', description: 'Holy, 1917' },
-                    { name: 'Nightmare', description: 'Dark, 1917' },
-                    { name: 'Blast III', description: 'Non-elemental, 2556 — highest damage, use vs elementally immune enemies' },
-                    { name: 'Magic Sword II', description: 'Non-elemental physical-magic hybrid, 1533' }
-                ],
-                combatRotation: "Turn 1 Golem's Fortitude (Def/Res buff), Turn 2 Sorrow III (debuff enemy magic), Turn 3+ cycle elements for Weaved Elemancy bonus — fire first for faction bonus, then rotate ice/lightning/earth/holy/dark. Use Blast III against elementally immune enemies. Use Wildfire II for fire-weak enemies.",
-                upgradePriorities: "Black Witch Staff to L10, replace both accessories with T7 Legendary/Ornate pieces, acquire Twilight Wisp follower (300,000 Orns).",
+                knownWeaknesses: 'Accessories undertiered at T4. Mana management on long dungeon floors.',
+                currentStats: { hp: 0, ward: 0, attack: 0, defense: 0, resistance: 0, dexterity: 0, foresight: 0, crit: 0, mana: 0, magic: 0 },
+                loadout: createDefaultLoadout(),
                 ornsAvailable: 723055,
                 metaNotes: '',
-                lastMetaUpdate: null,
-                lastLoadoutUpdate: new Date().toISOString()
+                lastMetaUpdate: null
             }
         ];
 
@@ -174,42 +141,44 @@
 
         const AppProvider = ({ children }) => {
             const [profiles, setProfiles] = useState(() => {
-                const saved = localStorage.getItem('aethric_profiles');
+                const saved = localStorage.getItem('aethric_profiles_v2');
                 return saved ? JSON.parse(saved) : DEFAULT_PROFILES;
             });
             const [activeProfileId, setActiveProfileId] = useState(() => {
-                const saved = localStorage.getItem('aethric_active_profile');
-                return saved || DEFAULT_PROFILES[0].id;
+                return localStorage.getItem('aethric_active_profile') || DEFAULT_PROFILES[0].id;
             });
             const [apiKey, setApiKey] = useState(() => localStorage.getItem('aethric_api_key') || '');
             const [evaluationHistory, setEvaluationHistory] = useState(() => {
-                const saved = localStorage.getItem('aethric_eval_history');
+                const saved = localStorage.getItem('aethric_eval_history_v2');
                 return saved ? JSON.parse(saved) : {};
             });
             const [activeTab, setActiveTab] = useState('profile');
 
-            useEffect(() => {
-                localStorage.setItem('aethric_profiles', JSON.stringify(profiles));
-            }, [profiles]);
-
-            useEffect(() => {
-                localStorage.setItem('aethric_active_profile', activeProfileId);
-            }, [activeProfileId]);
-
-            useEffect(() => {
-                localStorage.setItem('aethric_api_key', apiKey);
-            }, [apiKey]);
-
-            useEffect(() => {
-                localStorage.setItem('aethric_eval_history', JSON.stringify(evaluationHistory));
-            }, [evaluationHistory]);
+            useEffect(() => { localStorage.setItem('aethric_profiles_v2', JSON.stringify(profiles)); }, [profiles]);
+            useEffect(() => { localStorage.setItem('aethric_active_profile', activeProfileId); }, [activeProfileId]);
+            useEffect(() => { localStorage.setItem('aethric_api_key', apiKey); }, [apiKey]);
+            useEffect(() => { localStorage.setItem('aethric_eval_history_v2', JSON.stringify(evaluationHistory)); }, [evaluationHistory]);
 
             const activeProfile = profiles.find(p => p.id === activeProfileId) || profiles[0];
 
             const updateProfile = (updates) => {
-                setProfiles(prev => prev.map(p =>
-                    p.id === activeProfileId ? { ...p, ...updates } : p
-                ));
+                setProfiles(prev => prev.map(p => p.id === activeProfileId ? { ...p, ...updates } : p));
+            };
+
+            const updateLoadout = (slotKey, item) => {
+                setProfiles(prev => prev.map(p => {
+                    if (p.id !== activeProfileId) return p;
+                    return { ...p, loadout: { ...p.loadout, [slotKey]: item } };
+                }));
+            };
+
+            const updateSkillSlot = (index, skill) => {
+                setProfiles(prev => prev.map(p => {
+                    if (p.id !== activeProfileId) return p;
+                    const skills = [...p.loadout.skills];
+                    skills[index] = skill;
+                    return { ...p, loadout: { ...p.loadout, skills } };
+                }));
             };
 
             const addEvaluation = (evaluation) => {
@@ -221,14 +190,7 @@
             };
 
             const addProfile = (profile) => {
-                const newProfile = {
-                    ...DEFAULT_PROFILES[0],
-                    ...profile,
-                    id: `profile-${Date.now()}`,
-                    gear: { ...DEFAULT_PROFILES[0].gear },
-                    skillLoadout: [],
-                    currentStats: { ...DEFAULT_PROFILES[0].currentStats }
-                };
+                const newProfile = { ...DEFAULT_PROFILES[0], ...profile, id: `profile-${Date.now()}`, loadout: createDefaultLoadout() };
                 setProfiles(prev => [...prev, newProfile]);
                 setActiveProfileId(newProfile.id);
             };
@@ -236,15 +198,13 @@
             const deleteProfile = (id) => {
                 if (profiles.length <= 1) return;
                 setProfiles(prev => prev.filter(p => p.id !== id));
-                if (activeProfileId === id) {
-                    setActiveProfileId(profiles.find(p => p.id !== id)?.id);
-                }
+                if (activeProfileId === id) setActiveProfileId(profiles.find(p => p.id !== id)?.id);
             };
 
             return (
                 <AppContext.Provider value={{
-                    profiles, setProfiles, activeProfile, activeProfileId, setActiveProfileId,
-                    updateProfile, apiKey, setApiKey, evaluationHistory, addEvaluation,
+                    profiles, activeProfile, activeProfileId, setActiveProfileId, updateProfile,
+                    updateLoadout, updateSkillSlot, apiKey, setApiKey, evaluationHistory, addEvaluation,
                     activeTab, setActiveTab, addProfile, deleteProfile
                 }}>
                     {children}
@@ -253,13 +213,35 @@
         };
 
         // ============ API SERVICE ============
-        const callClaudeAPI = async (apiKey, messages, systemPrompt, useVision = false, useWebSearch = false) => {
-            const tools = useWebSearch ? [{
-                type: "web_search_20250305",
-                name: "web_search",
-                max_uses: 5
-            }] : undefined;
+        const estimateTokens = (text) => Math.ceil(text.length / 4);
+        const estimateCost = (inputTokens, outputTokens) => {
+            const inputCost = (inputTokens / 1000000) * 3;
+            const outputCost = (outputTokens / 1000000) * 15;
+            return (inputCost + outputCost).toFixed(4);
+        };
 
+        const buildCompactPrompt = (profile, slot, currentItem, newItem) => {
+            const faction = FACTIONS[profile.faction];
+            return `Gear advisor for ${profile.game}. Evaluate for: ${profile.classSpec}, ${profile.playstyle}, T${profile.tier}.
+Faction: ${profile.faction} (${faction?.bonus}).
+CRITICAL: ${profile.knownWeaknesses}
+Current ${slot}: ${currentItem ? JSON.stringify(currentItem) : 'Empty'}
+New item: ${JSON.stringify(newItem)}
+Return JSON only: {"verdict":"Upgrade|Sidegrade|Downgrade|Skip","color":"green|yellow|red","reason":"<50 words","flags":["array"],"priority":1-5}`;
+        };
+
+        const buildSkillPrompt = (profile, currentSkills, newSkill) => {
+            const faction = FACTIONS[profile.faction];
+            const elements = currentSkills.filter(s => s).map(s => s.element).filter(e => e && e !== 'None');
+            return `Skill advisor for ${profile.game}. Evaluate for: ${profile.classSpec}, ${profile.playstyle}.
+Faction: ${profile.faction} (${faction?.element} bonus).
+Current elements: [${elements.join(',')}]
+New skill: ${JSON.stringify(newSkill)}
+Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|yellow|red","reason":"<50 words","rotation":"when to use","replaces":"skill name or none","priority":1-5}`;
+        };
+
+        const callClaudeAPI = async (apiKey, prompt, useWebSearch = false) => {
+            const tools = useWebSearch ? [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }] : undefined;
             const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: {
@@ -270,64 +252,23 @@
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
-                    max_tokens: 4096,
-                    system: systemPrompt,
-                    messages: messages,
+                    max_tokens: 500,
+                    messages: [{ role: 'user', content: prompt }],
                     ...(tools && { tools })
                 })
             });
-
             if (!response.ok) {
                 const error = await response.json();
                 throw new Error(error.error?.message || 'API request failed');
             }
-
             return response.json();
-        };
-
-        const buildSystemPrompt = (profile) => {
-            return `You are AethricAdvisor, a build advisor for Hero of Aethric and Orna: The GPS RPG. You evaluate gear and skills not just on raw stats but on fit with the player's build identity, faction synergies, known weaknesses, and combat rotation. Be direct and opinionated. Flag problems clearly. Prioritise survivability concerns over raw damage for tank builds.
-
-ACTIVE CHARACTER PROFILE:
-Name: ${profile.name}
-Game: ${profile.game}
-Class: ${profile.classSpec}
-Tier: ${profile.tier} | Level: ${profile.level}
-Faction: ${profile.faction} (${FACTIONS[profile.faction]?.bonus || ''})
-Playstyle: ${profile.playstyle}
-Endgame Target: ${profile.endgameTarget}
-
-BUILD NOTES: ${profile.buildNotes}
-
-CURRENT STATS:
-HP: ${profile.currentStats.hp} | Ward: ${profile.currentStats.ward} | Attack: ${profile.currentStats.attack}
-Defense: ${profile.currentStats.defense} | Resistance: ${profile.currentStats.resistance}
-Dexterity: ${profile.currentStats.dexterity} | Foresight: ${profile.currentStats.foresight} | Crit: ${profile.currentStats.crit}%
-${profile.currentStats.mana ? `Mana: ${profile.currentStats.mana} | Magic: ${profile.currentStats.magic}` : ''}
-
-CURRENT GEAR:
-${Object.entries(profile.gear).map(([slot, item]) => `${slot}: ${item.name} (${item.stats}) ${item.notes ? `[${item.notes}]` : ''}`).join('\n')}
-
-KNOWN WEAKNESSES: ${profile.knownWeaknesses}
-
-CURRENT SKILL LOADOUT:
-${profile.skillLoadout.map(s => `- ${s.name}: ${s.description}`).join('\n')}
-
-COMBAT ROTATION: ${profile.combatRotation}
-
-UPGRADE PRIORITIES: ${profile.upgradePriorities}
-
-${profile.name === 'Biffius' ? 'CRITICAL: Always flag if an item worsens his critically low Resistance of 148. Resistance is the primary concern for this build.' : ''}
-${profile.name === 'Spiffius' ? 'CRITICAL: Always check elemental coverage for Weaved Elemancy passive. The build needs multiple elements cycled per combat for maximum damage.' : ''}`;
         };
 
         // ============ COMPONENTS ============
 
-        // Password Gate Component
+        // Password Gate
         const PasswordGate = ({ children }) => {
-            const [isAuthenticated, setIsAuthenticated] = useState(() => {
-                return sessionStorage.getItem(SESSION_AUTH_KEY) === 'true';
-            });
+            const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem(SESSION_AUTH_KEY) === 'true');
             const [password, setPassword] = useState('');
             const [error, setError] = useState('');
             const [isShaking, setIsShaking] = useState(false);
@@ -337,86 +278,47 @@ ${profile.name === 'Spiffius' ? 'CRITICAL: Always check elemental coverage for W
                 if (password === APP_PASSWORD) {
                     sessionStorage.setItem(SESSION_AUTH_KEY, 'true');
                     setIsAuthenticated(true);
-                    setError('');
                 } else {
-                    setError('Incorrect password. Access denied.');
+                    setError('Incorrect password');
                     setIsShaking(true);
                     setTimeout(() => setIsShaking(false), 500);
                     setPassword('');
                 }
             };
 
-            if (isAuthenticated) {
-                return children;
-            }
+            if (isAuthenticated) return children;
 
             return (
                 <div className="fixed inset-0 bg-obsidian flex items-center justify-center z-[9999]">
-                    <div className={`bg-charcoal border-2 border-darkred/50 rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl ${isShaking ? 'animate-shake' : ''}`}>
+                    <div className={`bg-charcoal border-2 border-darkred/50 rounded-lg p-8 max-w-md w-full mx-4 ${isShaking ? 'animate-shake' : ''}`}>
                         <div className="text-center mb-8">
                             <h1 className="font-cinzel text-3xl text-gold mb-2">AethricAdvisor</h1>
-                            <p className="text-gray-400 text-sm">Enter password to access the sanctum</p>
+                            <p className="text-gray-400 text-sm">Enter password to access</p>
                         </div>
                         <form onSubmit={handleSubmit}>
-                            <div className="mb-4">
-                                <input
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                                    placeholder="Enter password..."
-                                    autoFocus
-                                    className="w-full bg-slate border border-gray-700 rounded-lg px-4 py-3 text-center text-lg focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold/50 placeholder-gray-500"
-                                />
-                            </div>
-                            {error && (
-                                <div className="mb-4 p-3 bg-red-900/30 border border-red-700/50 rounded text-red-400 text-sm text-center">
-                                    {error}
-                                </div>
-                            )}
-                            <button
-                                type="submit"
-                                className="w-full py-3 bg-darkred/70 hover:bg-darkred text-white font-cinzel rounded-lg transition-colors glow-red"
-                            >
-                                Enter the Codex
-                            </button>
+                            <input type="password" value={password} onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                                placeholder="Password..." autoFocus
+                                className="w-full bg-slate border border-gray-700 rounded-lg px-4 py-3 text-center mb-4 focus:outline-none focus:border-gold" />
+                            {error && <div className="mb-4 p-3 bg-red-900/30 border border-red-700/50 rounded text-red-400 text-sm text-center">{error}</div>}
+                            <button type="submit" className="w-full py-3 bg-darkred/70 hover:bg-darkred text-white font-cinzel rounded-lg">Enter</button>
                         </form>
-                        <div className="mt-6 text-center">
-                            <span className="text-gray-600 text-xs">Build-aware gear and skill optimizer</span>
-                        </div>
                     </div>
-                    <style>{`
-                        @keyframes shake {
-                            0%, 100% { transform: translateX(0); }
-                            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-                            20%, 40%, 60%, 80% { transform: translateX(5px); }
-                        }
-                        .animate-shake { animation: shake 0.5s ease-in-out; }
-                    `}</style>
                 </div>
             );
         };
 
-        // Header Component
+        // Header
         const Header = () => {
             const { activeProfile, profiles, activeProfileId, setActiveProfileId } = useContext(AppContext);
             const faction = FACTIONS[activeProfile.faction];
-
             return (
                 <header className="bg-obsidian border-b border-darkred/50 sticky top-0 z-50">
                     <div className="max-w-6xl mx-auto px-4 py-3">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <h1 className="font-cinzel text-xl md:text-2xl text-gold">AethricAdvisor</h1>
-                                <span className="text-xs text-gray-500 hidden sm:inline">Build Optimizer</span>
-                            </div>
-                            <select
-                                value={activeProfileId}
-                                onChange={(e) => setActiveProfileId(e.target.value)}
-                                className="bg-slate border border-darkred/50 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-gold"
-                            >
-                                {profiles.map(p => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
+                            <h1 className="font-cinzel text-xl md:text-2xl text-gold">AethricAdvisor</h1>
+                            <select value={activeProfileId} onChange={(e) => setActiveProfileId(e.target.value)}
+                                className="bg-slate border border-darkred/50 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-gold">
+                                {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                         </div>
                         <div className="mt-2 flex items-center gap-2 text-sm">
@@ -425,63 +327,39 @@ ${profile.name === 'Spiffius' ? 'CRITICAL: Always check elemental coverage for W
                             <span className="text-gray-400">·</span>
                             <span className="text-gray-300">{activeProfile.classSpec}</span>
                             <span className="bg-darkred/50 px-2 py-0.5 rounded text-xs">T{activeProfile.tier}</span>
-                            {activeProfile.ornsAvailable > 0 && (
-                                <span className="text-gold text-xs ml-auto">
-                                    {activeProfile.ornsAvailable.toLocaleString()} Orns
-                                </span>
-                            )}
                         </div>
                     </div>
                 </header>
             );
         };
 
-        // Tab Navigation - Bottom on mobile, top on desktop
+        // Tab Navigation
         const TabNav = () => {
             const { activeTab, setActiveTab } = useContext(AppContext);
             const tabs = [
                 { id: 'profile', label: 'Profile', icon: '👤' },
+                { id: 'loadout', label: 'Loadout', icon: '🎒' },
                 { id: 'gear', label: 'Gear', icon: '⚔️' },
                 { id: 'skills', label: 'Skills', icon: '✨' },
-                { id: 'loadout', label: 'Loadout', icon: '🎒' },
                 { id: 'meta', label: 'Meta', icon: '📊' }
             ];
-
             return (
                 <>
-                    {/* Desktop: Top navigation */}
-                    <nav className="hidden md:block bg-slate border-b border-darkred/30 sticky top-[88px] z-40">
-                        <div className="max-w-6xl mx-auto px-4">
-                            <div className="flex overflow-x-auto scrollbar-dark">
-                                {tabs.map(tab => (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => setActiveTab(tab.id)}
-                                        className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors ${
-                                            activeTab === tab.id
-                                                ? 'text-gold border-b-2 border-gold'
-                                                : 'text-gray-400 hover:text-white'
-                                        }`}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                ))}
-                            </div>
+                    <nav className="hidden md:block bg-slate border-b border-darkred/30 sticky top-[72px] z-40">
+                        <div className="max-w-6xl mx-auto px-4 flex">
+                            {tabs.map(tab => (
+                                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                                    className={`px-4 py-3 text-sm font-medium ${activeTab === tab.id ? 'text-gold border-b-2 border-gold' : 'text-gray-400 hover:text-white'}`}>
+                                    {tab.label}
+                                </button>
+                            ))}
                         </div>
                     </nav>
-                    {/* Mobile: Bottom navigation */}
-                    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-obsidian border-t border-darkred/50 z-40 pb-safe">
+                    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-obsidian border-t border-darkred/50 z-40">
                         <div className="flex justify-around">
                             {tabs.map(tab => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`flex-1 py-3 flex flex-col items-center gap-1 transition-colors ${
-                                        activeTab === tab.id
-                                            ? 'text-gold'
-                                            : 'text-gray-500'
-                                    }`}
-                                >
+                                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                                    className={`flex-1 py-3 flex flex-col items-center gap-1 ${activeTab === tab.id ? 'text-gold' : 'text-gray-500'}`}>
                                     <span className="text-lg">{tab.icon}</span>
                                     <span className="text-xs">{tab.label}</span>
                                 </button>
@@ -492,325 +370,495 @@ ${profile.name === 'Spiffius' ? 'CRITICAL: Always check elemental coverage for W
             );
         };
 
-        // Floating Action Button for quick screenshot evaluation
-        const FloatingActionButton = ({ onFileSelect }) => {
-            const fileInputRef = useRef(null);
+        // Utility Components
+        const LoadingSpinner = ({ message }) => (
+            <div className="flex items-center gap-3 p-4 bg-slate/50 rounded-lg">
+                <div className="w-5 h-5 border-2 border-gold border-t-transparent rounded-full animate-spin"></div>
+                <span className="text-gold animate-pulse-slow">{message || LOADING_MESSAGES[Math.floor(Math.random() * LOADING_MESSAGES.length)]}</span>
+            </div>
+        );
 
-            const handleClick = () => {
-                fileInputRef.current?.click();
-            };
-
-            const handleFileChange = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    onFileSelect(file);
-                }
-                e.target.value = '';
-            };
-
-            return (
-                <>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        className="hidden"
-                    />
-                    <button
-                        onClick={handleClick}
-                        className="md:hidden fixed bottom-20 right-4 z-50 bg-darkred hover:bg-red-800 text-white rounded-full p-4 shadow-lg glow-red flex flex-col items-center gap-1 transition-transform active:scale-95"
-                        style={{ minWidth: '72px' }}
-                    >
-                        <span className="text-2xl">📷</span>
-                        <span className="text-xs font-medium whitespace-nowrap">Evaluate</span>
-                    </button>
-                </>
-            );
-        };
-
-        // Copy to Clipboard Button
-        const CopyButton = ({ text, label = 'Copy' }) => {
-            const [copied, setCopied] = useState(false);
-
-            const handleCopy = async () => {
-                try {
-                    await navigator.clipboard.writeText(text);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                } catch (err) {
-                    console.error('Failed to copy:', err);
-                }
-            };
-
-            return (
-                <button
-                    onClick={handleCopy}
-                    className={`px-3 py-1.5 text-xs rounded transition-colors ${
-                        copied
-                            ? 'bg-green-900/50 text-green-400'
-                            : 'bg-slate hover:bg-gray-700 text-gray-400'
-                    }`}
-                >
-                    {copied ? '✓ Copied' : `📋 ${label}`}
-                </button>
-            );
-        };
-
-        // API Key Input
-        const ApiKeyInput = () => {
-            const { apiKey, setApiKey } = useContext(AppContext);
-            const [showKey, setShowKey] = useState(false);
-
-            return (
-                <div className="bg-slate/50 border border-darkred/30 rounded-lg p-4 mb-6">
-                    <label className="block text-sm text-gray-400 mb-2">Anthropic API Key</label>
-                    <div className="flex gap-2">
-                        <input
-                            type={showKey ? 'text' : 'password'}
-                            value={apiKey}
-                            onChange={(e) => setApiKey(e.target.value)}
-                            placeholder="sk-ant-..."
-                            className="flex-1 bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                        />
-                        <button
-                            onClick={() => setShowKey(!showKey)}
-                            className="px-3 py-2 bg-charcoal border border-gray-700 rounded text-sm hover:border-gold"
-                        >
-                            {showKey ? 'Hide' : 'Show'}
-                        </button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">Stored locally in your browser. Never sent anywhere except Anthropic's API.</p>
-                </div>
-            );
-        };
-
-        // Loading Spinner
-        const LoadingSpinner = ({ message }) => {
-            const [loadingText, setLoadingText] = useState(message || LOADING_MESSAGES[0]);
-
-            useEffect(() => {
-                if (!message) {
-                    const interval = setInterval(() => {
-                        setLoadingText(LOADING_MESSAGES[Math.floor(Math.random() * LOADING_MESSAGES.length)]);
-                    }, 2000);
-                    return () => clearInterval(interval);
-                }
-            }, [message]);
-
-            return (
-                <div className="flex items-center gap-3 p-4 bg-slate/50 rounded-lg">
-                    <div className="w-5 h-5 border-2 border-gold border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-gold animate-pulse-slow">{loadingText}</span>
-                </div>
-            );
-        };
-
-        // Verdict Badge
         const VerdictBadge = ({ verdict, color }) => {
-            const colors = {
-                green: 'bg-green-900/50 text-green-400 border-green-700',
-                yellow: 'bg-yellow-900/50 text-yellow-400 border-yellow-700',
-                red: 'bg-red-900/50 text-red-400 border-red-700'
+            const colors = { green: 'bg-green-900/50 text-green-400 border-green-700', yellow: 'bg-yellow-900/50 text-yellow-400 border-yellow-700', red: 'bg-red-900/50 text-red-400 border-red-700' };
+            return <span className={`px-3 py-1 rounded border text-sm ${colors[color] || colors.yellow}`}>{verdict}</span>;
+        };
+
+        const CopyButton = ({ text }) => {
+            const [copied, setCopied] = useState(false);
+            const handleCopy = async () => { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+            return <button onClick={handleCopy} className={`px-2 py-1 text-xs rounded ${copied ? 'bg-green-900/50 text-green-400' : 'bg-slate text-gray-400 hover:bg-gray-700'}`}>{copied ? '✓' : '📋'}</button>;
+        };
+
+        // ============ GEAR FORM ============
+        const GearForm = ({ gear, setGear, onSubmit, submitLabel = 'Evaluate', isLoading = false }) => {
+            const updateStat = (stat, value) => setGear(prev => ({ ...prev, stats: { ...prev.stats, [stat]: parseInt(value) || 0 } }));
+            const updateMod = (stat, mod) => setGear(prev => ({ ...prev, statMods: { ...prev.statMods, [stat]: mod } }));
+            const toggleProperty = (prop) => {
+                setGear(prev => ({
+                    ...prev,
+                    specialProperties: prev.specialProperties.includes(prop)
+                        ? prev.specialProperties.filter(p => p !== prop)
+                        : [...prev.specialProperties, prop]
+                }));
             };
 
             return (
-                <span className={`px-3 py-1 rounded border ${colors[color] || colors.yellow}`}>
-                    {verdict}
-                </span>
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="col-span-2">
+                            <label className="block text-xs text-gray-500 mb-1">Item Name</label>
+                            <input type="text" value={gear.name} onChange={(e) => setGear(prev => ({ ...prev, name: e.target.value }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Quality</label>
+                            <select value={gear.quality} onChange={(e) => setGear(prev => ({ ...prev, quality: e.target.value }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm">
+                                {QUALITIES.map(q => <option key={q}>{q}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Tier</label>
+                            <select value={gear.tier} onChange={(e) => setGear(prev => ({ ...prev, tier: e.target.value }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm">
+                                {TIERS.map(t => <option key={t}>{t}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Level (1-10)</label>
+                            <input type="number" inputMode="numeric" min="1" max="10" value={gear.level}
+                                onChange={(e) => setGear(prev => ({ ...prev, level: Math.min(10, Math.max(1, parseInt(e.target.value) || 1)) }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Slot</label>
+                            <select value={gear.slot} onChange={(e) => setGear(prev => ({ ...prev, slot: e.target.value }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm">
+                                {SLOTS.map(s => <option key={s}>{s}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Useable By</label>
+                            <select value={gear.useableBy} onChange={(e) => setGear(prev => ({ ...prev, useableBy: e.target.value }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm">
+                                {USEABLE_BY.map(u => <option key={u}>{u}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Element</label>
+                            <select value={gear.element} onChange={(e) => setGear(prev => ({ ...prev, element: e.target.value }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm">
+                                {ELEMENTS.map(e => <option key={e}>{e}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Ability Name</label>
+                            <input type="text" value={gear.abilityName} onChange={(e) => setGear(prev => ({ ...prev, abilityName: e.target.value }))}
+                                placeholder="Optional" className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Ability Description</label>
+                            <input type="text" value={gear.abilityDesc} onChange={(e) => setGear(prev => ({ ...prev, abilityDesc: e.target.value }))}
+                                placeholder="Optional" className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs text-gray-500 mb-2">Stats (use +/- to indicate bonus or penalty)</label>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                            {STATS.map(stat => (
+                                <div key={stat} className="flex items-center gap-1">
+                                    <select value={gear.statMods[stat]} onChange={(e) => updateMod(stat, e.target.value)}
+                                        className="bg-charcoal border border-gray-700 rounded px-1 py-1 text-sm w-10">
+                                        <option>+</option>
+                                        <option>-</option>
+                                    </select>
+                                    <input type="number" inputMode="numeric" value={gear.stats[stat]} onChange={(e) => updateStat(stat, e.target.value)}
+                                        className="flex-1 bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm w-16" />
+                                    <span className="text-xs text-gray-500 w-12 truncate">{STAT_LABELS[stat]}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs text-gray-500 mb-2">Special Properties</label>
+                        <div className="flex flex-wrap gap-2">
+                            {SPECIAL_PROPERTIES.map(prop => (
+                                <label key={prop} className="flex items-center gap-1 text-xs cursor-pointer">
+                                    <input type="checkbox" checked={gear.specialProperties.includes(prop)} onChange={() => toggleProperty(prop)}
+                                        className="rounded border-gray-600 bg-charcoal text-gold focus:ring-gold" />
+                                    <span className={gear.specialProperties.includes(prop) ? 'text-gold' : 'text-gray-400'}>{prop}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Materials Required</label>
+                            <input type="text" value={gear.materials} onChange={(e) => setGear(prev => ({ ...prev, materials: e.target.value }))}
+                                placeholder="Optional" className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Notes</label>
+                            <input type="text" value={gear.notes} onChange={(e) => setGear(prev => ({ ...prev, notes: e.target.value }))}
+                                placeholder="Optional" className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                        </div>
+                    </div>
+
+                    {onSubmit && (
+                        <button onClick={onSubmit} disabled={isLoading || !gear.name}
+                            className="w-full py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50">
+                            {isLoading ? 'Evaluating...' : submitLabel}
+                        </button>
+                    )}
+                </div>
+            );
+        };
+
+        // ============ SKILL FORM ============
+        const SkillForm = ({ skill, setSkill, onSubmit, submitLabel = 'Evaluate', isLoading = false }) => {
+            return (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div className="col-span-2 md:col-span-1">
+                            <label className="block text-xs text-gray-500 mb-1">Skill Name</label>
+                            <input type="text" value={skill.name} onChange={(e) => setSkill(prev => ({ ...prev, name: e.target.value }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Type</label>
+                            <select value={skill.type} onChange={(e) => setSkill(prev => ({ ...prev, type: e.target.value }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm">
+                                {SKILL_TYPES.map(t => <option key={t}>{t}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Element</label>
+                            <select value={skill.element} onChange={(e) => setSkill(prev => ({ ...prev, element: e.target.value }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm">
+                                {SKILL_ELEMENTS.map(e => <option key={e}>{e}</option>)}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Mana Cost</label>
+                            <input type="number" inputMode="numeric" value={skill.manaCost} onChange={(e) => setSkill(prev => ({ ...prev, manaCost: parseInt(e.target.value) || 0 }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Power Min</label>
+                            <input type="number" inputMode="numeric" value={skill.powerMin} onChange={(e) => setSkill(prev => ({ ...prev, powerMin: parseInt(e.target.value) || 0 }))}
+                                placeholder="0" className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Power Max</label>
+                            <input type="number" inputMode="numeric" value={skill.powerMax} onChange={(e) => setSkill(prev => ({ ...prev, powerMax: parseInt(e.target.value) || 0 }))}
+                                placeholder="0" className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Hit Count</label>
+                            <input type="number" inputMode="numeric" min="1" value={skill.hitCount} onChange={(e) => setSkill(prev => ({ ...prev, hitCount: Math.max(1, parseInt(e.target.value) || 1) }))}
+                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs text-gray-500 mb-1">Effect Description</label>
+                        <textarea value={skill.effect} onChange={(e) => setSkill(prev => ({ ...prev, effect: e.target.value }))} rows={2}
+                            placeholder="What does this skill do?" className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:border-gold" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Source Class</label>
+                            <input type="text" value={skill.sourceClass} onChange={(e) => setSkill(prev => ({ ...prev, sourceClass: e.target.value }))}
+                                placeholder="Optional" className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Notes</label>
+                            <input type="text" value={skill.notes} onChange={(e) => setSkill(prev => ({ ...prev, notes: e.target.value }))}
+                                placeholder="Optional" className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                        </div>
+                    </div>
+
+                    {onSubmit && (
+                        <button onClick={onSubmit} disabled={isLoading || !skill.name}
+                            className="w-full py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50">
+                            {isLoading ? 'Evaluating...' : submitLabel}
+                        </button>
+                    )}
+                </div>
             );
         };
 
         // ============ PROFILE TAB ============
         const ProfileTab = () => {
-            const { activeProfile, updateProfile, addProfile, deleteProfile, profiles } = useContext(AppContext);
+            const { activeProfile, updateProfile, addProfile, deleteProfile, profiles, apiKey, setApiKey } = useContext(AppContext);
             const [isEditing, setIsEditing] = useState(false);
             const [editData, setEditData] = useState(activeProfile);
             const [showNewProfile, setShowNewProfile] = useState(false);
             const [newProfileName, setNewProfileName] = useState('');
 
-            useEffect(() => {
-                setEditData(activeProfile);
-            }, [activeProfile]);
+            useEffect(() => { setEditData(activeProfile); }, [activeProfile]);
 
-            const handleSave = () => {
-                updateProfile(editData);
-                setIsEditing(false);
-            };
-
-            const handleCreateProfile = () => {
-                if (newProfileName.trim()) {
-                    addProfile({ name: newProfileName.trim() });
-                    setNewProfileName('');
-                    setShowNewProfile(false);
-                }
-            };
-
-            const InputField = ({ label, field, type = 'text', options = null }) => (
-                <div className="mb-4">
-                    <label className="block text-sm text-gray-400 mb-1">{label}</label>
-                    {options ? (
-                        <select
-                            value={editData[field]}
-                            onChange={(e) => setEditData(prev => ({ ...prev, [field]: e.target.value }))}
-                            disabled={!isEditing}
-                            className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold disabled:opacity-60"
-                        >
-                            {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                        </select>
-                    ) : type === 'textarea' ? (
-                        <textarea
-                            value={editData[field]}
-                            onChange={(e) => setEditData(prev => ({ ...prev, [field]: e.target.value }))}
-                            disabled={!isEditing}
-                            rows={4}
-                            className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold disabled:opacity-60 resize-none"
-                        />
-                    ) : type === 'number' ? (
-                        <input
-                            type="number" inputMode="numeric"
-                            value={editData[field]}
-                            onChange={(e) => setEditData(prev => ({ ...prev, [field]: parseInt(e.target.value) || 0 }))}
-                            disabled={!isEditing}
-                            className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold disabled:opacity-60"
-                        />
-                    ) : (
-                        <input
-                            type="text"
-                            value={editData[field]}
-                            onChange={(e) => setEditData(prev => ({ ...prev, [field]: e.target.value }))}
-                            disabled={!isEditing}
-                            className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold disabled:opacity-60"
-                        />
-                    )}
-                </div>
-            );
-
-            const StatInput = ({ label, stat }) => (
-                <div>
-                    <label className="block text-xs text-gray-500 mb-1">{label}</label>
-                    <input
-                        type="number" inputMode="numeric"
-                        value={editData.currentStats?.[stat] || 0}
-                        onChange={(e) => setEditData(prev => ({
-                            ...prev,
-                            currentStats: { ...prev.currentStats, [stat]: parseInt(e.target.value) || 0 }
-                        }))}
-                        disabled={!isEditing}
-                        className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm focus:outline-none focus:border-gold disabled:opacity-60"
-                    />
-                </div>
-            );
+            const handleSave = () => { updateProfile(editData); setIsEditing(false); };
 
             return (
                 <div className="space-y-6">
-                    <ApiKeyInput />
+                    <div className="bg-slate/50 border border-darkred/30 rounded-lg p-4">
+                        <label className="block text-sm text-gray-400 mb-2">Anthropic API Key</label>
+                        <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-ant-..."
+                            className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
+                        <p className="text-xs text-gray-500 mt-2">Stored locally. Used for gear/skill evaluation and meta refresh.</p>
+                    </div>
 
                     <div className="flex justify-between items-center">
                         <h2 className="font-cinzel text-xl text-gold">Character Profile</h2>
                         <div className="flex gap-2">
                             {isEditing ? (
                                 <>
-                                    <button onClick={handleSave} className="px-4 py-2 bg-green-900/50 text-green-400 rounded hover:bg-green-900/70 text-sm">
-                                        Save
-                                    </button>
-                                    <button onClick={() => { setIsEditing(false); setEditData(activeProfile); }} className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600 text-sm">
-                                        Cancel
-                                    </button>
+                                    <button onClick={handleSave} className="px-4 py-2 bg-green-900/50 text-green-400 rounded text-sm">Save</button>
+                                    <button onClick={() => { setIsEditing(false); setEditData(activeProfile); }} className="px-4 py-2 bg-gray-700 rounded text-sm">Cancel</button>
                                 </>
                             ) : (
                                 <>
-                                    <button onClick={() => setIsEditing(true)} className="px-4 py-2 bg-darkred/50 rounded hover:bg-darkred/70 text-sm">
-                                        Edit
-                                    </button>
-                                    <button onClick={() => setShowNewProfile(true)} className="px-4 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 text-sm">
-                                        + New
-                                    </button>
+                                    <button onClick={() => setIsEditing(true)} className="px-4 py-2 bg-darkred/50 rounded text-sm">Edit</button>
+                                    <button onClick={() => setShowNewProfile(true)} className="px-4 py-2 bg-gold/20 text-gold rounded text-sm">+ New</button>
                                 </>
                             )}
                         </div>
                     </div>
 
                     {showNewProfile && (
-                        <div className="bg-slate/50 border border-gold/30 rounded-lg p-4">
-                            <h3 className="font-cinzel text-gold mb-3">Create New Profile</h3>
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={newProfileName}
-                                    onChange={(e) => setNewProfileName(e.target.value)}
-                                    placeholder="Character name..."
-                                    className="flex-1 bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                                />
-                                <button onClick={handleCreateProfile} className="px-4 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 text-sm">
-                                    Create
-                                </button>
-                                <button onClick={() => setShowNewProfile(false)} className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600 text-sm">
-                                    Cancel
-                                </button>
+                        <div className="bg-slate/50 border border-gold/30 rounded-lg p-4 flex gap-2">
+                            <input type="text" value={newProfileName} onChange={(e) => setNewProfileName(e.target.value)} placeholder="Character name..."
+                                className="flex-1 bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm" />
+                            <button onClick={() => { if (newProfileName.trim()) { addProfile({ name: newProfileName.trim() }); setNewProfileName(''); setShowNewProfile(false); } }}
+                                className="px-4 py-2 bg-gold/20 text-gold rounded text-sm">Create</button>
+                            <button onClick={() => setShowNewProfile(false)} className="px-4 py-2 bg-gray-700 rounded text-sm">Cancel</button>
+                        </div>
+                    )}
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4 space-y-3">
+                            <h3 className="text-gold font-medium">Basic Info</h3>
+                            {[
+                                { label: 'Name', field: 'name' },
+                                { label: 'Game', field: 'game', options: GAMES },
+                                { label: 'Class & Spec', field: 'classSpec' },
+                                { label: 'Faction', field: 'faction', options: Object.keys(FACTIONS) },
+                                { label: 'Playstyle', field: 'playstyle', options: PLAYSTYLES },
+                                { label: 'Endgame Target', field: 'endgameTarget' }
+                            ].map(({ label, field, options }) => (
+                                <div key={field}>
+                                    <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                                    {options ? (
+                                        <select value={editData[field]} onChange={(e) => setEditData(prev => ({ ...prev, [field]: e.target.value }))}
+                                            disabled={!isEditing} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm disabled:opacity-60">
+                                            {options.map(o => <option key={o}>{o}</option>)}
+                                        </select>
+                                    ) : (
+                                        <input type="text" value={editData[field]} onChange={(e) => setEditData(prev => ({ ...prev, [field]: e.target.value }))}
+                                            disabled={!isEditing} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm disabled:opacity-60" />
+                                    )}
+                                </div>
+                            ))}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs text-gray-500 mb-1">Tier</label>
+                                    <input type="number" inputMode="numeric" value={editData.tier} onChange={(e) => setEditData(prev => ({ ...prev, tier: parseInt(e.target.value) || 1 }))}
+                                        disabled={!isEditing} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm disabled:opacity-60" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 mb-1">Level</label>
+                                    <input type="number" inputMode="numeric" value={editData.level} onChange={(e) => setEditData(prev => ({ ...prev, level: parseInt(e.target.value) || 1 }))}
+                                        disabled={!isEditing} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm disabled:opacity-60" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4 space-y-3">
+                            <h3 className="text-gold font-medium">Known Weaknesses</h3>
+                            <textarea value={editData.knownWeaknesses} onChange={(e) => setEditData(prev => ({ ...prev, knownWeaknesses: e.target.value }))}
+                                disabled={!isEditing} rows={4} placeholder="Critical build weaknesses the evaluator should flag..."
+                                className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm resize-none disabled:opacity-60" />
+                            <p className="text-xs text-gray-500">This is sent to the AI with every evaluation to ensure it flags relevant issues.</p>
+
+                            <h3 className="text-gold font-medium mt-4">Orns Available</h3>
+                            <input type="number" inputMode="numeric" value={editData.ornsAvailable} onChange={(e) => setEditData(prev => ({ ...prev, ornsAvailable: parseInt(e.target.value) || 0 }))}
+                                disabled={!isEditing} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm disabled:opacity-60" />
+                        </div>
+                    </div>
+
+                    {profiles.length > 1 && (
+                        <button onClick={() => { if (confirm(`Delete "${activeProfile.name}"?`)) deleteProfile(activeProfile.id); }}
+                            className="px-4 py-2 bg-red-900/30 text-red-400 rounded text-sm">Delete Profile</button>
+                    )}
+                </div>
+            );
+        };
+
+        // ============ LOADOUT TAB ============
+        const LoadoutTab = () => {
+            const { activeProfile, updateLoadout, updateSkillSlot } = useContext(AppContext);
+            const [editingSlot, setEditingSlot] = useState(null);
+            const [editingSkillIndex, setEditingSkillIndex] = useState(null);
+            const [tempGear, setTempGear] = useState({ ...EMPTY_GEAR });
+            const [tempSkill, setTempSkill] = useState({ ...EMPTY_SKILL });
+
+            const gearSlots = [
+                { key: 'head', label: 'Head' },
+                { key: 'torso', label: 'Torso' },
+                { key: 'legs', label: 'Legs' },
+                { key: 'weapon', label: 'Weapon' },
+                { key: 'offhand', label: 'Off-hand' },
+                { key: 'accessory1', label: 'Accessory 1' },
+                { key: 'accessory2', label: 'Accessory 2' }
+            ];
+
+            const startEditGear = (slotKey) => {
+                const current = activeProfile.loadout[slotKey];
+                setTempGear(current ? { ...current } : { ...EMPTY_GEAR });
+                setEditingSlot(slotKey);
+            };
+
+            const saveGear = () => {
+                if (tempGear.name) {
+                    updateLoadout(editingSlot, tempGear);
+                }
+                setEditingSlot(null);
+            };
+
+            const clearGear = (slotKey) => {
+                updateLoadout(slotKey, null);
+            };
+
+            const startEditSkill = (index) => {
+                const current = activeProfile.loadout.skills[index];
+                setTempSkill(current ? { ...current } : { ...EMPTY_SKILL });
+                setEditingSkillIndex(index);
+            };
+
+            const saveSkill = () => {
+                if (tempSkill.name) {
+                    updateSkillSlot(editingSkillIndex, tempSkill);
+                }
+                setEditingSkillIndex(null);
+            };
+
+            const clearSkill = (index) => {
+                updateSkillSlot(index, null);
+            };
+
+            const formatGearSummary = (gear) => {
+                if (!gear) return null;
+                const stats = Object.entries(gear.stats).filter(([_, v]) => v > 0).map(([k, v]) => `${gear.statMods[k]}${v} ${STAT_LABELS[k]}`).join(', ');
+                return `${gear.quality} ${gear.name} ${gear.tier} L${gear.level}${stats ? ` (${stats})` : ''}`;
+            };
+
+            const formatSkillSummary = (skill) => {
+                if (!skill) return null;
+                const power = skill.powerMin || skill.powerMax ? `${skill.powerMin}-${skill.powerMax}${skill.hitCount > 1 ? ` x${skill.hitCount}` : ''}` : '';
+                return `${skill.name} [${skill.element}]${power ? ` ${power}` : ''}`;
+            };
+
+            return (
+                <div className="space-y-6">
+                    <h2 className="font-cinzel text-xl text-gold">Loadout Builder</h2>
+                    <p className="text-sm text-gray-400">Set your current equipped gear and skills. These are used as the comparison baseline for all evaluations.</p>
+
+                    {/* Gear Slots */}
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {gearSlots.map(({ key, label }) => {
+                            const item = activeProfile.loadout[key];
+                            return (
+                                <div key={key} className="bg-slate/30 border border-darkred/20 rounded-lg p-3">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs text-gray-500 uppercase">{label}</span>
+                                        <div className="flex gap-1">
+                                            <button onClick={() => startEditGear(key)} className="text-xs text-gold hover:underline">{item ? 'Edit' : 'Add'}</button>
+                                            {item && <button onClick={() => clearGear(key)} className="text-xs text-red-400 hover:underline ml-2">Clear</button>}
+                                        </div>
+                                    </div>
+                                    {item ? (
+                                        <div className="text-sm">
+                                            <div className="text-gold font-medium">{item.name}</div>
+                                            <div className="text-xs text-gray-400">{item.quality} {item.tier} L{item.level}</div>
+                                            {item.abilityName && <div className="text-xs text-ember mt-1">{item.abilityName}</div>}
+                                        </div>
+                                    ) : (
+                                        <div className="text-gray-600 text-sm italic">Empty slot</div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Gear Edit Modal */}
+                    {editingSlot && (
+                        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setEditingSlot(null)}>
+                            <div className="bg-charcoal border border-darkred/50 rounded-lg p-4 max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-cinzel text-gold">Edit {gearSlots.find(s => s.key === editingSlot)?.label}</h3>
+                                    <button onClick={() => setEditingSlot(null)} className="text-gray-400 hover:text-white text-xl">&times;</button>
+                                </div>
+                                <GearForm gear={tempGear} setGear={setTempGear} />
+                                <div className="flex gap-2 mt-4">
+                                    <button onClick={saveGear} className="flex-1 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30">Save to Loadout</button>
+                                    <button onClick={() => setEditingSlot(null)} className="px-4 py-2 bg-gray-700 rounded">Cancel</button>
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    <div className="grid md:grid-cols-2 gap-6">
-                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                            <h3 className="text-gold font-medium mb-4">Basic Info</h3>
-                            <InputField label="Character Name" field="name" />
-                            <InputField label="Game" field="game" options={GAMES} />
-                            <InputField label="Class & Specialization" field="classSpec" />
-                            <div className="grid grid-cols-2 gap-4">
-                                <InputField label="Tier" field="tier" type="number" inputMode="numeric" />
-                                <InputField label="Level" field="level" type="number" inputMode="numeric" />
-                            </div>
-                            <InputField label="Faction" field="faction" options={Object.keys(FACTIONS)} />
-                            <InputField label="Playstyle Goal" field="playstyle" options={PLAYSTYLES} />
-                            <InputField label="Endgame Target Class" field="endgameTarget" />
-                            <InputField label="Orns Available" field="ornsAvailable" type="number" inputMode="numeric" />
-                        </div>
-
-                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                            <h3 className="text-gold font-medium mb-4">Current Stats</h3>
-                            <div className="grid grid-cols-3 gap-3">
-                                <StatInput label="HP" stat="hp" />
-                                <StatInput label="Ward" stat="ward" />
-                                <StatInput label="Attack" stat="attack" />
-                                <StatInput label="Defense" stat="defense" />
-                                <StatInput label="Resistance" stat="resistance" />
-                                <StatInput label="Dexterity" stat="dexterity" />
-                                <StatInput label="Foresight" stat="foresight" />
-                                <StatInput label="Crit %" stat="crit" />
-                                <StatInput label="Mana" stat="mana" />
-                                <StatInput label="Magic" stat="magic" />
-                            </div>
-
-                            {activeProfile.currentStats?.resistance < 200 && activeProfile.playstyle?.includes('Tank') && (
-                                <div className="mt-4 p-3 bg-red-900/30 border border-red-700/50 rounded text-sm text-red-400">
-                                    ⚠️ Resistance critically low ({activeProfile.currentStats?.resistance}) for tank build
+                    {/* Skills Section */}
+                    <h3 className="font-cinzel text-lg text-gold mt-6">Skill Loadout (12 slots)</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {activeProfile.loadout.skills.map((skill, index) => (
+                            <div key={index} className="bg-slate/30 border border-darkred/20 rounded p-2">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs text-gray-600">#{index + 1}</span>
+                                    <div className="flex gap-1">
+                                        <button onClick={() => startEditSkill(index)} className="text-xs text-gold hover:underline">{skill ? 'Edit' : 'Add'}</button>
+                                        {skill && <button onClick={() => clearSkill(index)} className="text-xs text-red-400 hover:underline">X</button>}
+                                    </div>
                                 </div>
-                            )}
-                        </div>
+                                {skill ? (
+                                    <div className="text-xs">
+                                        <div className="text-gold truncate">{skill.name}</div>
+                                        <div className="text-gray-500">{skill.element} {skill.type}</div>
+                                    </div>
+                                ) : (
+                                    <div className="text-gray-600 text-xs italic">Empty</div>
+                                )}
+                            </div>
+                        ))}
                     </div>
 
-                    <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                        <h3 className="text-gold font-medium mb-4">Build Details</h3>
-                        <InputField label="Build Notes" field="buildNotes" type="textarea" />
-                        <InputField label="Known Weaknesses" field="knownWeaknesses" type="textarea" />
-                        <InputField label="Combat Rotation" field="combatRotation" type="textarea" />
-                        <InputField label="Upgrade Priorities" field="upgradePriorities" type="textarea" />
-                    </div>
-
-                    {profiles.length > 1 && (
-                        <div className="flex justify-end">
-                            <button
-                                onClick={() => {
-                                    if (confirm(`Delete profile "${activeProfile.name}"?`)) {
-                                        deleteProfile(activeProfile.id);
-                                    }
-                                }}
-                                className="px-4 py-2 bg-red-900/30 text-red-400 rounded hover:bg-red-900/50 text-sm"
-                            >
-                                Delete Profile
-                            </button>
+                    {/* Skill Edit Modal */}
+                    {editingSkillIndex !== null && (
+                        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setEditingSkillIndex(null)}>
+                            <div className="bg-charcoal border border-darkred/50 rounded-lg p-4 max-w-xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-cinzel text-gold">Edit Skill #{editingSkillIndex + 1}</h3>
+                                    <button onClick={() => setEditingSkillIndex(null)} className="text-gray-400 hover:text-white text-xl">&times;</button>
+                                </div>
+                                <SkillForm skill={tempSkill} setSkill={setTempSkill} />
+                                <div className="flex gap-2 mt-4">
+                                    <button onClick={saveSkill} className="flex-1 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30">Save to Loadout</button>
+                                    <button onClick={() => setEditingSkillIndex(null)} className="px-4 py-2 bg-gray-700 rounded">Cancel</button>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -820,116 +868,43 @@ ${profile.name === 'Spiffius' ? 'CRITICAL: Always check elemental coverage for W
         // ============ GEAR TAB ============
         const GearTab = () => {
             const { activeProfile, apiKey, addEvaluation, evaluationHistory, activeProfileId } = useContext(AppContext);
-            const [inputMode, setInputMode] = useState('screenshot');
+            const [gear, setGear] = useState({ ...EMPTY_GEAR });
             const [isLoading, setIsLoading] = useState(false);
             const [error, setError] = useState('');
             const [result, setResult] = useState(null);
-            const [imageData, setImageData] = useState(null);
-            const fileInputRef = useRef(null);
+            const [tokenInfo, setTokenInfo] = useState(null);
 
-            const [manualGear, setManualGear] = useState({
-                name: '', tier: 7, slot: 'Weapon', quality: 'Legendary', level: 1,
-                attack: 0, defense: 0, resistance: 0, hp: 0, mana: 0, ward: 0,
-                magic: 0, dexterity: 0, foresight: 0, element: 'None',
-                ability: '', useableBy: 'All', materials: ''
-            });
-
-            const handleImageUpload = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        setImageData(e.target.result);
-                    };
-                    reader.readAsDataURL(file);
-                }
+            const getSlotKey = (slot) => {
+                const map = { 'Weapon': 'weapon', 'Off-hand': 'offhand', 'Head': 'head', 'Torso': 'torso', 'Legs': 'legs', 'Accessory': 'accessory1' };
+                return map[slot] || 'weapon';
             };
 
-            const evaluateGear = async (isScreenshot = false) => {
-                if (!apiKey) {
-                    setError('Please enter your API key in the Profile tab');
-                    return;
-                }
-
+            const evaluateGear = async () => {
+                if (!apiKey) { setError('Please enter your API key in the Profile tab'); return; }
                 setIsLoading(true);
                 setError('');
                 setResult(null);
+                setTokenInfo(null);
 
                 try {
-                    const systemPrompt = buildSystemPrompt(activeProfile);
-                    let messages;
+                    const slotKey = getSlotKey(gear.slot);
+                    const currentItem = activeProfile.loadout[slotKey];
+                    const prompt = buildCompactPrompt(activeProfile, gear.slot, currentItem, gear);
+                    const inputTokens = estimateTokens(prompt);
 
-                    if (isScreenshot && imageData) {
-                        const base64Data = imageData.split(',')[1];
-                        const mediaType = imageData.split(';')[0].split(':')[1];
+                    const response = await callClaudeAPI(apiKey, prompt);
+                    const textContent = response.content.find(c => c.type === 'text')?.text || '';
+                    const outputTokens = estimateTokens(textContent);
 
-                        messages = [{
-                            role: 'user',
-                            content: [
-                                {
-                                    type: 'image',
-                                    source: { type: 'base64', media_type: mediaType, data: base64Data }
-                                },
-                                {
-                                    type: 'text',
-                                    text: `Extract all visible stats from this gear screenshot and evaluate it for my build. Return your response as JSON with this structure:
-{
-  "item_name": "string",
-  "extracted_stats": { "tier": number, "slot": "string", "quality": "string", "level": number, "attack": number, "defense": number, "resistance": number, "hp": number, "mana": number, "ward": number, "magic": number, "dexterity": number, "foresight": number, "element": "string", "ability": "string", "useableBy": "string" },
-  "verdict": "Upgrade|Sidegrade|Downgrade|Wrong class|Situational",
-  "color_rating": "green|yellow|red",
-  "stat_comparison": [{"stat": "string", "current": number, "new": number, "change": "string"}],
-  "synergy_analysis": "string",
-  "flags": ["string"],
-  "ability_analysis": "string",
-  "upgrade_priority": number,
-  "rationale": "string"
-}`
-                                }
-                            ]
-                        }];
-                    } else {
-                        messages = [{
-                            role: 'user',
-                            content: `Evaluate this gear for my build:
+                    setTokenInfo({ input: inputTokens, output: outputTokens, cost: estimateCost(inputTokens, outputTokens) });
 
-Item: ${manualGear.name}
-Tier: ${manualGear.tier} | Quality: ${manualGear.quality} | Level: ${manualGear.level}
-Slot: ${manualGear.slot}
-Stats: Attack ${manualGear.attack}, Defense ${manualGear.defense}, Resistance ${manualGear.resistance}, HP ${manualGear.hp}, Mana ${manualGear.mana}, Ward ${manualGear.ward}%, Magic ${manualGear.magic}, Dexterity ${manualGear.dexterity}, Foresight ${manualGear.foresight}
-Element: ${manualGear.element}
-Ability: ${manualGear.ability || 'None'}
-Useable By: ${manualGear.useableBy}
-Materials Required: ${manualGear.materials || 'Unknown'}
-
-Return your response as JSON with this structure:
-{
-  "item_name": "string",
-  "extracted_stats": { "tier": number, "slot": "string", "quality": "string", "level": number, "attack": number, "defense": number, "resistance": number, "hp": number, "mana": number, "ward": number, "magic": number, "dexterity": number, "foresight": number, "element": "string", "ability": "string" },
-  "verdict": "Upgrade|Sidegrade|Downgrade|Wrong class|Situational",
-  "color_rating": "green|yellow|red",
-  "stat_comparison": [{"stat": "string", "current": number, "new": number, "change": "string"}],
-  "synergy_analysis": "string",
-  "flags": ["string"],
-  "ability_analysis": "string",
-  "upgrade_priority": number,
-  "rationale": "string"
-}`
-                        }];
-                    }
-
-                    const response = await callClaudeAPI(apiKey, messages, systemPrompt, isScreenshot);
-
-                    let textContent = response.content.find(c => c.type === 'text')?.text || '';
-
-                    // Extract JSON from response
                     const jsonMatch = textContent.match(/\{[\s\S]*\}/);
                     if (jsonMatch) {
                         const parsed = JSON.parse(jsonMatch[0]);
-                        setResult(parsed);
-                        addEvaluation({ type: 'gear', ...parsed });
+                        setResult({ ...parsed, item_name: gear.name });
+                        addEvaluation({ type: 'gear', item_name: gear.name, ...parsed });
                     } else {
-                        setResult({ rationale: textContent, verdict: 'Unknown', color_rating: 'yellow' });
+                        setResult({ verdict: 'Unknown', color: 'yellow', reason: textContent });
                     }
                 } catch (err) {
                     setError(err.message);
@@ -941,270 +916,41 @@ Return your response as JSON with this structure:
             const profileHistory = evaluationHistory[activeProfileId]?.filter(e => e.type === 'gear') || [];
 
             return (
-                <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                        <h2 className="font-cinzel text-xl text-gold">Gear Evaluator</h2>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setInputMode('screenshot')}
-                                className={`px-3 py-1.5 rounded text-sm ${inputMode === 'screenshot' ? 'bg-gold/20 text-gold' : 'bg-slate text-gray-400'}`}
-                            >
-                                Screenshot
-                            </button>
-                            <button
-                                onClick={() => setInputMode('manual')}
-                                className={`px-3 py-1.5 rounded text-sm ${inputMode === 'manual' ? 'bg-gold/20 text-gold' : 'bg-slate text-gray-400'}`}
-                            >
-                                Manual
-                            </button>
-                        </div>
+                <div className="space-y-6 pb-20 md:pb-0">
+                    <h2 className="font-cinzel text-xl text-gold">Gear Evaluator</h2>
+                    <p className="text-sm text-gray-400">Enter gear details to evaluate against your current loadout.</p>
+
+                    <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
+                        <GearForm gear={gear} setGear={setGear} onSubmit={evaluateGear} isLoading={isLoading} />
                     </div>
 
-                    {inputMode === 'screenshot' ? (
-                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                            <div
-                                onClick={() => fileInputRef.current?.click()}
-                                className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-gold/50 transition-colors"
-                            >
-                                {imageData ? (
-                                    <img src={imageData} alt="Uploaded gear" className="max-h-64 mx-auto rounded" />
-                                ) : (
-                                    <div className="text-gray-400">
-                                        <div className="text-4xl mb-2">📷</div>
-                                        <p>Click to upload gear screenshot</p>
-                                        <p className="text-sm text-gray-500 mt-1">PNG, JPG supported</p>
-                                    </div>
-                                )}
-                            </div>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                onChange={handleImageUpload}
-                                className="hidden"
-                            />
-                            {imageData && (
-                                <div className="flex gap-2 mt-4">
-                                    <button
-                                        onClick={() => evaluateGear(true)}
-                                        disabled={isLoading}
-                                        className="flex-1 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50"
-                                    >
-                                        {isLoading ? 'Analyzing...' : 'Evaluate Gear'}
-                                    </button>
-                                    <button
-                                        onClick={() => { setImageData(null); setResult(null); }}
-                                        className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600"
-                                    >
-                                        Clear
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                            <div className="grid md:grid-cols-3 gap-4 mb-4">
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Item Name</label>
-                                    <input
-                                        type="text"
-                                        value={manualGear.name}
-                                        onChange={(e) => setManualGear(prev => ({ ...prev, name: e.target.value }))}
-                                        className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Slot</label>
-                                    <select
-                                        value={manualGear.slot}
-                                        onChange={(e) => setManualGear(prev => ({ ...prev, slot: e.target.value }))}
-                                        className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                                    >
-                                        {SLOTS.map(s => <option key={s} value={s}>{s}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Quality</label>
-                                    <select
-                                        value={manualGear.quality}
-                                        onChange={(e) => setManualGear(prev => ({ ...prev, quality: e.target.value }))}
-                                        className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                                    >
-                                        {QUALITIES.map(q => <option key={q} value={q}>{q}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 md:grid-cols-6 gap-3 mb-4">
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Tier</label>
-                                    <input type="number" inputMode="numeric" value={manualGear.tier} onChange={(e) => setManualGear(prev => ({ ...prev, tier: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Level</label>
-                                    <input type="number" inputMode="numeric" value={manualGear.level} onChange={(e) => setManualGear(prev => ({ ...prev, level: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Attack</label>
-                                    <input type="number" inputMode="numeric" value={manualGear.attack} onChange={(e) => setManualGear(prev => ({ ...prev, attack: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Defense</label>
-                                    <input type="number" inputMode="numeric" value={manualGear.defense} onChange={(e) => setManualGear(prev => ({ ...prev, defense: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Resistance</label>
-                                    <input type="number" inputMode="numeric" value={manualGear.resistance} onChange={(e) => setManualGear(prev => ({ ...prev, resistance: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">HP</label>
-                                    <input type="number" inputMode="numeric" value={manualGear.hp} onChange={(e) => setManualGear(prev => ({ ...prev, hp: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Mana</label>
-                                    <input type="number" inputMode="numeric" value={manualGear.mana} onChange={(e) => setManualGear(prev => ({ ...prev, mana: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Ward %</label>
-                                    <input type="number" inputMode="numeric" value={manualGear.ward} onChange={(e) => setManualGear(prev => ({ ...prev, ward: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Magic</label>
-                                    <input type="number" inputMode="numeric" value={manualGear.magic} onChange={(e) => setManualGear(prev => ({ ...prev, magic: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Dexterity</label>
-                                    <input type="number" inputMode="numeric" value={manualGear.dexterity} onChange={(e) => setManualGear(prev => ({ ...prev, dexterity: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Foresight</label>
-                                    <input type="number" inputMode="numeric" value={manualGear.foresight} onChange={(e) => setManualGear(prev => ({ ...prev, foresight: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Element</label>
-                                    <select value={manualGear.element} onChange={(e) => setManualGear(prev => ({ ...prev, element: e.target.value }))} className="w-full bg-charcoal border border-gray-700 rounded px-2 py-1 text-sm">
-                                        {ELEMENTS.map(el => <option key={el} value={el}>{el}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="grid md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Ability</label>
-                                    <input
-                                        type="text"
-                                        value={manualGear.ability}
-                                        onChange={(e) => setManualGear(prev => ({ ...prev, ability: e.target.value }))}
-                                        placeholder="e.g., Bastion - grants Ward for 3 turns"
-                                        className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Useable By</label>
-                                    <select
-                                        value={manualGear.useableBy}
-                                        onChange={(e) => setManualGear(prev => ({ ...prev, useableBy: e.target.value }))}
-                                        className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                                    >
-                                        {USEABLE_BY.map(u => <option key={u} value={u}>{u}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="mb-4">
-                                <label className="block text-sm text-gray-400 mb-1">Materials Required</label>
-                                <input
-                                    type="text"
-                                    value={manualGear.materials}
-                                    onChange={(e) => setManualGear(prev => ({ ...prev, materials: e.target.value }))}
-                                    placeholder="e.g., 5x Orichalcum, 3x Dragon Scale"
-                                    className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                                />
-                            </div>
-
-                            <button
-                                onClick={() => evaluateGear(false)}
-                                disabled={isLoading || !manualGear.name}
-                                className="w-full py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50"
-                            >
-                                {isLoading ? 'Evaluating...' : 'Evaluate Gear'}
-                            </button>
-                        </div>
-                    )}
-
                     {isLoading && <LoadingSpinner />}
-
-                    {error && (
-                        <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-4 text-red-400">
-                            {error}
-                        </div>
-                    )}
+                    {error && <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-4 text-red-400">{error}</div>}
 
                     {result && (
-                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4 space-y-4">
+                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4 space-y-3">
                             <div className="flex items-center justify-between flex-wrap gap-2">
-                                <h3 className="font-cinzel text-lg text-gold">{result.item_name || 'Evaluation Result'}</h3>
+                                <h3 className="font-cinzel text-lg text-gold">{result.item_name}</h3>
                                 <div className="flex items-center gap-2">
-                                    <CopyButton
-                                        text={`${result.item_name || 'Item'}\nVerdict: ${result.verdict}${result.flags?.length ? '\nFlags: ' + result.flags.join(', ') : ''}${result.synergy_analysis ? '\nSynergy: ' + result.synergy_analysis : ''}${result.ability_analysis ? '\nAbility: ' + result.ability_analysis : ''}${result.upgrade_priority ? '\nPriority: ' + result.upgrade_priority + '/5' : ''}${result.rationale ? '\n\n' + result.rationale : ''}`}
-                                        label="Copy"
-                                    />
-                                    <VerdictBadge verdict={result.verdict} color={result.color_rating} />
+                                    <CopyButton text={`${result.item_name}\nVerdict: ${result.verdict}\n${result.reason}${result.flags?.length ? '\nFlags: ' + result.flags.join(', ') : ''}`} />
+                                    <VerdictBadge verdict={result.verdict} color={result.color} />
                                 </div>
                             </div>
-
-                            {result.flags && result.flags.length > 0 && (
+                            {result.flags?.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
-                                    {result.flags.map((flag, i) => (
-                                        <span key={i} className="px-2 py-1 bg-darkred/30 text-sm rounded">{flag}</span>
-                                    ))}
+                                    {result.flags.map((flag, i) => <span key={i} className="px-2 py-1 bg-darkred/30 text-xs rounded">{flag}</span>)}
                                 </div>
                             )}
-
-                            {result.stat_comparison && result.stat_comparison.length > 0 && (
-                                <div>
-                                    <h4 className="text-sm text-gray-400 mb-2">Stat Comparison</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                        {result.stat_comparison.map((stat, i) => (
-                                            <div key={i} className="bg-charcoal rounded p-2 text-sm">
-                                                <div className="text-gray-400 text-xs">{stat.stat}</div>
-                                                <div className={stat.change?.includes('+') ? 'text-green-400' : stat.change?.includes('-') ? 'text-red-400' : 'text-gray-300'}>
-                                                    {stat.current} → {stat.new} ({stat.change})
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {result.synergy_analysis && (
-                                <div>
-                                    <h4 className="text-sm text-gray-400 mb-1">Synergy Analysis</h4>
-                                    <p className="text-sm">{result.synergy_analysis}</p>
-                                </div>
-                            )}
-
-                            {result.ability_analysis && (
-                                <div>
-                                    <h4 className="text-sm text-gray-400 mb-1">Ability Analysis</h4>
-                                    <p className="text-sm">{result.ability_analysis}</p>
-                                </div>
-                            )}
-
-                            {result.upgrade_priority && (
+                            <p className="text-sm text-gray-300">{result.reason}</p>
+                            {result.priority && (
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm text-gray-400">Upgrade Priority:</span>
-                                    <div className="flex gap-1">
-                                        {[1,2,3,4,5].map(n => (
-                                            <span key={n} className={`w-4 h-4 rounded ${n <= result.upgrade_priority ? 'bg-gold' : 'bg-gray-700'}`}></span>
-                                        ))}
-                                    </div>
+                                    <span className="text-xs text-gray-500">Priority:</span>
+                                    {[1,2,3,4,5].map(n => <span key={n} className={`w-3 h-3 rounded ${n <= result.priority ? 'bg-gold' : 'bg-gray-700'}`}></span>)}
                                 </div>
                             )}
-
-                            {result.rationale && (
-                                <div className="border-t border-gray-700 pt-3 mt-3">
-                                    <p className="text-sm text-gray-300">{result.rationale}</p>
+                            {tokenInfo && (
+                                <div className="text-xs text-gray-500 border-t border-gray-700 pt-2 mt-2">
+                                    Tokens: ~{tokenInfo.input} in / ~{tokenInfo.output} out | Est. cost: ${tokenInfo.cost}
                                 </div>
                             )}
                         </div>
@@ -1214,13 +960,10 @@ Return your response as JSON with this structure:
                         <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
                             <h3 className="font-cinzel text-gold mb-3">Recent Evaluations</h3>
                             <div className="space-y-2">
-                                {profileHistory.slice(0, 5).map((eval_, i) => (
+                                {profileHistory.slice(0, 5).map((ev, i) => (
                                     <div key={i} className="flex items-center justify-between text-sm bg-charcoal rounded p-2">
-                                        <span>{eval_.item_name}</span>
-                                        <div className="flex items-center gap-2">
-                                            <VerdictBadge verdict={eval_.verdict} color={eval_.color_rating} />
-                                            <span className="text-xs text-gray-500">{new Date(eval_.timestamp).toLocaleDateString()}</span>
-                                        </div>
+                                        <span className="truncate">{ev.item_name}</span>
+                                        <VerdictBadge verdict={ev.verdict} color={ev.color} />
                                     </div>
                                 ))}
                             </div>
@@ -1233,103 +976,36 @@ Return your response as JSON with this structure:
         // ============ SKILLS TAB ============
         const SkillsTab = () => {
             const { activeProfile, apiKey, addEvaluation, evaluationHistory, activeProfileId } = useContext(AppContext);
-            const [inputMode, setInputMode] = useState('manual');
+            const [skill, setSkill] = useState({ ...EMPTY_SKILL });
             const [isLoading, setIsLoading] = useState(false);
             const [error, setError] = useState('');
             const [result, setResult] = useState(null);
-            const [imageData, setImageData] = useState(null);
-            const fileInputRef = useRef(null);
+            const [tokenInfo, setTokenInfo] = useState(null);
 
-            const [manualSkill, setManualSkill] = useState({
-                name: '', type: 'Spell', element: 'Fire', manaCost: 0,
-                powerMin: 0, powerMax: 0, effect: '', sourceClass: ''
-            });
-
-            const handleImageUpload = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (e) => setImageData(e.target.result);
-                    reader.readAsDataURL(file);
-                }
-            };
-
-            const evaluateSkill = async (isScreenshot = false) => {
-                if (!apiKey) {
-                    setError('Please enter your API key in the Profile tab');
-                    return;
-                }
-
+            const evaluateSkill = async () => {
+                if (!apiKey) { setError('Please enter your API key in the Profile tab'); return; }
                 setIsLoading(true);
                 setError('');
                 setResult(null);
+                setTokenInfo(null);
 
                 try {
-                    const systemPrompt = buildSystemPrompt(activeProfile);
-                    let messages;
+                    const prompt = buildSkillPrompt(activeProfile, activeProfile.loadout.skills, skill);
+                    const inputTokens = estimateTokens(prompt);
 
-                    if (isScreenshot && imageData) {
-                        const base64Data = imageData.split(',')[1];
-                        const mediaType = imageData.split(';')[0].split(':')[1];
+                    const response = await callClaudeAPI(apiKey, prompt);
+                    const textContent = response.content.find(c => c.type === 'text')?.text || '';
+                    const outputTokens = estimateTokens(textContent);
 
-                        messages = [{
-                            role: 'user',
-                            content: [
-                                { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
-                                { type: 'text', text: `Extract all visible information from this skill/spell screenshot and evaluate it for my build. Return JSON:
-{
-  "skill_name": "string",
-  "extracted_info": { "type": "string", "element": "string", "mana_cost": number, "power_range": "string", "effect": "string" },
-  "verdict": "Must Have|Strong Addition|Situational|Skip",
-  "color_rating": "green|yellow|red",
-  "build_fit_analysis": "string",
-  "elemental_coverage": "string",
-  "rotation_placement": "string",
-  "replaces_what": "string",
-  "priority": number,
-  "rationale": "string"
-}` }
-                            ]
-                        }];
-                    } else {
-                        messages = [{
-                            role: 'user',
-                            content: `Evaluate this skill for my build:
-
-Skill: ${manualSkill.name}
-Type: ${manualSkill.type}
-Element: ${manualSkill.element}
-Mana Cost: ${manualSkill.manaCost}
-Power: ${manualSkill.powerMin}-${manualSkill.powerMax}
-Effect: ${manualSkill.effect}
-Source Class: ${manualSkill.sourceClass}
-
-Return JSON:
-{
-  "skill_name": "string",
-  "extracted_info": { "type": "string", "element": "string", "mana_cost": number, "power_range": "string", "effect": "string" },
-  "verdict": "Must Have|Strong Addition|Situational|Skip",
-  "color_rating": "green|yellow|red",
-  "build_fit_analysis": "string",
-  "elemental_coverage": "string",
-  "rotation_placement": "string",
-  "replaces_what": "string",
-  "priority": number,
-  "rationale": "string"
-}`
-                        }];
-                    }
-
-                    const response = await callClaudeAPI(apiKey, messages, systemPrompt, isScreenshot);
-                    let textContent = response.content.find(c => c.type === 'text')?.text || '';
+                    setTokenInfo({ input: inputTokens, output: outputTokens, cost: estimateCost(inputTokens, outputTokens) });
 
                     const jsonMatch = textContent.match(/\{[\s\S]*\}/);
                     if (jsonMatch) {
                         const parsed = JSON.parse(jsonMatch[0]);
-                        setResult(parsed);
-                        addEvaluation({ type: 'skill', ...parsed });
+                        setResult({ ...parsed, skill_name: skill.name });
+                        addEvaluation({ type: 'skill', skill_name: skill.name, ...parsed });
                     } else {
-                        setResult({ rationale: textContent, verdict: 'Unknown', color_rating: 'yellow' });
+                        setResult({ verdict: 'Unknown', color: 'yellow', reason: textContent });
                     }
                 } catch (err) {
                     setError(err.message);
@@ -1341,161 +1017,38 @@ Return JSON:
             const profileHistory = evaluationHistory[activeProfileId]?.filter(e => e.type === 'skill') || [];
 
             return (
-                <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                        <h2 className="font-cinzel text-xl text-gold">Skill / Spell Evaluator</h2>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setInputMode('screenshot')}
-                                className={`px-3 py-1.5 rounded text-sm ${inputMode === 'screenshot' ? 'bg-gold/20 text-gold' : 'bg-slate text-gray-400'}`}
-                            >
-                                Screenshot
-                            </button>
-                            <button
-                                onClick={() => setInputMode('manual')}
-                                className={`px-3 py-1.5 rounded text-sm ${inputMode === 'manual' ? 'bg-gold/20 text-gold' : 'bg-slate text-gray-400'}`}
-                            >
-                                Manual
-                            </button>
-                        </div>
+                <div className="space-y-6 pb-20 md:pb-0">
+                    <h2 className="font-cinzel text-xl text-gold">Skill / Spell Evaluator</h2>
+                    <p className="text-sm text-gray-400">Enter skill details to evaluate against your current loadout and elemental coverage.</p>
+
+                    <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
+                        <SkillForm skill={skill} setSkill={setSkill} onSubmit={evaluateSkill} isLoading={isLoading} />
                     </div>
-
-                    {inputMode === 'screenshot' ? (
-                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                            <div
-                                onClick={() => fileInputRef.current?.click()}
-                                className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-gold/50 transition-colors"
-                            >
-                                {imageData ? (
-                                    <img src={imageData} alt="Uploaded skill" className="max-h-64 mx-auto rounded" />
-                                ) : (
-                                    <div className="text-gray-400">
-                                        <div className="text-4xl mb-2">✨</div>
-                                        <p>Click to upload skill screenshot</p>
-                                    </div>
-                                )}
-                            </div>
-                            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                            {imageData && (
-                                <div className="flex gap-2 mt-4">
-                                    <button onClick={() => evaluateSkill(true)} disabled={isLoading} className="flex-1 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50">
-                                        {isLoading ? 'Analyzing...' : 'Evaluate Skill'}
-                                    </button>
-                                    <button onClick={() => { setImageData(null); setResult(null); }} className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600">Clear</button>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                            <div className="grid md:grid-cols-3 gap-4 mb-4">
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Skill Name</label>
-                                    <input type="text" value={manualSkill.name} onChange={(e) => setManualSkill(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Type</label>
-                                    <select value={manualSkill.type} onChange={(e) => setManualSkill(prev => ({ ...prev, type: e.target.value }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold">
-                                        {SKILL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Element</label>
-                                    <select value={manualSkill.element} onChange={(e) => setManualSkill(prev => ({ ...prev, element: e.target.value }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold">
-                                        {[...ELEMENTS, 'Non-elemental'].map(el => <option key={el} value={el}>{el}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-4 mb-4">
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Mana Cost</label>
-                                    <input type="number" inputMode="numeric" value={manualSkill.manaCost} onChange={(e) => setManualSkill(prev => ({ ...prev, manaCost: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Power Min</label>
-                                    <input type="number" inputMode="numeric" value={manualSkill.powerMin} onChange={(e) => setManualSkill(prev => ({ ...prev, powerMin: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Power Max</label>
-                                    <input type="number" inputMode="numeric" value={manualSkill.powerMax} onChange={(e) => setManualSkill(prev => ({ ...prev, powerMax: parseInt(e.target.value) || 0 }))} className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm" />
-                                </div>
-                            </div>
-
-                            <div className="grid md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Effect Description</label>
-                                    <textarea value={manualSkill.effect} onChange={(e) => setManualSkill(prev => ({ ...prev, effect: e.target.value }))} rows={3} placeholder="e.g., Deals fire damage and has a chance to burn the target" className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:border-gold" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm text-gray-400 mb-1">Source Class</label>
-                                    <input type="text" value={manualSkill.sourceClass} onChange={(e) => setManualSkill(prev => ({ ...prev, sourceClass: e.target.value }))} placeholder="e.g., Inquisitor" className="w-full bg-charcoal border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-gold" />
-                                </div>
-                            </div>
-
-                            <button onClick={() => evaluateSkill(false)} disabled={isLoading || !manualSkill.name} className="w-full py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50">
-                                {isLoading ? 'Evaluating...' : 'Evaluate Skill'}
-                            </button>
-                        </div>
-                    )}
 
                     {isLoading && <LoadingSpinner />}
                     {error && <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-4 text-red-400">{error}</div>}
 
                     {result && (
-                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4 space-y-4">
+                        <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4 space-y-3">
                             <div className="flex items-center justify-between flex-wrap gap-2">
-                                <h3 className="font-cinzel text-lg text-gold">{result.skill_name || 'Evaluation Result'}</h3>
+                                <h3 className="font-cinzel text-lg text-gold">{result.skill_name}</h3>
                                 <div className="flex items-center gap-2">
-                                    <CopyButton
-                                        text={`${result.skill_name || 'Skill'}\nVerdict: ${result.verdict}${result.build_fit_analysis ? '\nBuild Fit: ' + result.build_fit_analysis : ''}${result.elemental_coverage ? '\nElemental: ' + result.elemental_coverage : ''}${result.rotation_placement ? '\nRotation: ' + result.rotation_placement : ''}${result.replaces_what ? '\nReplaces: ' + result.replaces_what : ''}${result.priority ? '\nPriority: ' + result.priority + '/5' : ''}${result.rationale ? '\n\n' + result.rationale : ''}`}
-                                        label="Copy"
-                                    />
-                                    <VerdictBadge verdict={result.verdict} color={result.color_rating} />
+                                    <CopyButton text={`${result.skill_name}\nVerdict: ${result.verdict}\n${result.reason}${result.rotation ? '\nRotation: ' + result.rotation : ''}${result.replaces ? '\nReplaces: ' + result.replaces : ''}`} />
+                                    <VerdictBadge verdict={result.verdict} color={result.color} />
                                 </div>
                             </div>
-
-                            {result.build_fit_analysis && (
-                                <div>
-                                    <h4 className="text-sm text-gray-400 mb-1">Build Fit</h4>
-                                    <p className="text-sm">{result.build_fit_analysis}</p>
-                                </div>
-                            )}
-
-                            {result.elemental_coverage && (
-                                <div>
-                                    <h4 className="text-sm text-gray-400 mb-1">Elemental Coverage</h4>
-                                    <p className="text-sm">{result.elemental_coverage}</p>
-                                </div>
-                            )}
-
-                            {result.rotation_placement && (
-                                <div>
-                                    <h4 className="text-sm text-gray-400 mb-1">Rotation Placement</h4>
-                                    <p className="text-sm">{result.rotation_placement}</p>
-                                </div>
-                            )}
-
-                            {result.replaces_what && (
-                                <div>
-                                    <h4 className="text-sm text-gray-400 mb-1">Replaces</h4>
-                                    <p className="text-sm">{result.replaces_what}</p>
-                                </div>
-                            )}
-
+                            <p className="text-sm text-gray-300">{result.reason}</p>
+                            {result.rotation && <p className="text-sm text-gray-400"><span className="text-gray-500">Rotation:</span> {result.rotation}</p>}
+                            {result.replaces && <p className="text-sm text-gray-400"><span className="text-gray-500">Replaces:</span> {result.replaces}</p>}
                             {result.priority && (
                                 <div className="flex items-center gap-2">
-                                    <span className="text-sm text-gray-400">Priority:</span>
-                                    <div className="flex gap-1">
-                                        {[1,2,3,4,5].map(n => (
-                                            <span key={n} className={`w-4 h-4 rounded ${n <= result.priority ? 'bg-gold' : 'bg-gray-700'}`}></span>
-                                        ))}
-                                    </div>
+                                    <span className="text-xs text-gray-500">Priority:</span>
+                                    {[1,2,3,4,5].map(n => <span key={n} className={`w-3 h-3 rounded ${n <= result.priority ? 'bg-gold' : 'bg-gray-700'}`}></span>)}
                                 </div>
                             )}
-
-                            {result.rationale && (
-                                <div className="border-t border-gray-700 pt-3 mt-3">
-                                    <p className="text-sm text-gray-300">{result.rationale}</p>
+                            {tokenInfo && (
+                                <div className="text-xs text-gray-500 border-t border-gray-700 pt-2 mt-2">
+                                    Tokens: ~{tokenInfo.input} in / ~{tokenInfo.output} out | Est. cost: ${tokenInfo.cost}
                                 </div>
                             )}
                         </div>
@@ -1503,182 +1056,17 @@ Return JSON:
 
                     {profileHistory.length > 0 && (
                         <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                            <h3 className="font-cinzel text-gold mb-3">Recent Skill Evaluations</h3>
+                            <h3 className="font-cinzel text-gold mb-3">Recent Evaluations</h3>
                             <div className="space-y-2">
-                                {profileHistory.slice(0, 5).map((eval_, i) => (
+                                {profileHistory.slice(0, 5).map((ev, i) => (
                                     <div key={i} className="flex items-center justify-between text-sm bg-charcoal rounded p-2">
-                                        <span>{eval_.skill_name}</span>
-                                        <div className="flex items-center gap-2">
-                                            <VerdictBadge verdict={eval_.verdict} color={eval_.color_rating} />
-                                            <span className="text-xs text-gray-500">{new Date(eval_.timestamp).toLocaleDateString()}</span>
-                                        </div>
+                                        <span className="truncate">{ev.skill_name}</span>
+                                        <VerdictBadge verdict={ev.verdict} color={ev.color} />
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
-                </div>
-            );
-        };
-
-        // ============ LOADOUT TAB ============
-        const LoadoutTab = () => {
-            const { activeProfile, updateProfile } = useContext(AppContext);
-            const [isEditing, setIsEditing] = useState(false);
-            const [editGear, setEditGear] = useState(activeProfile.gear);
-            const [editSkills, setEditSkills] = useState(activeProfile.skillLoadout);
-
-            useEffect(() => {
-                setEditGear(activeProfile.gear);
-                setEditSkills(activeProfile.skillLoadout);
-            }, [activeProfile]);
-
-            const handleSave = () => {
-                updateProfile({
-                    gear: editGear,
-                    skillLoadout: editSkills,
-                    lastLoadoutUpdate: new Date().toISOString()
-                });
-                setIsEditing(false);
-            };
-
-            const updateGearSlot = (slot, field, value) => {
-                setEditGear(prev => ({
-                    ...prev,
-                    [slot]: { ...prev[slot], [field]: value }
-                }));
-            };
-
-            const updateSkill = (index, field, value) => {
-                setEditSkills(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
-            };
-
-            const addSkill = () => {
-                setEditSkills(prev => [...prev, { name: 'New Skill', description: '' }]);
-            };
-
-            const removeSkill = (index) => {
-                setEditSkills(prev => prev.filter((_, i) => i !== index));
-            };
-
-            const gearSlots = [
-                { key: 'head', label: 'Head' },
-                { key: 'torso', label: 'Torso' },
-                { key: 'legs', label: 'Legs' },
-                { key: 'weapon', label: 'Weapon' },
-                { key: 'offhand', label: 'Off-hand' },
-                { key: 'accessory1', label: 'Accessory 1' },
-                { key: 'accessory2', label: 'Accessory 2' }
-            ];
-
-            return (
-                <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h2 className="font-cinzel text-xl text-gold">Current Loadout</h2>
-                            <p className="text-xs text-gray-500 mt-1">
-                                Last updated: {activeProfile.lastLoadoutUpdate ? new Date(activeProfile.lastLoadoutUpdate).toLocaleString() : 'Never'}
-                            </p>
-                        </div>
-                        <div className="flex gap-2">
-                            {isEditing ? (
-                                <>
-                                    <button onClick={handleSave} className="px-4 py-2 bg-green-900/50 text-green-400 rounded hover:bg-green-900/70 text-sm">Save</button>
-                                    <button onClick={() => { setIsEditing(false); setEditGear(activeProfile.gear); setEditSkills(activeProfile.skillLoadout); }} className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600 text-sm">Cancel</button>
-                                </>
-                            ) : (
-                                <button onClick={() => setIsEditing(true)} className="px-4 py-2 bg-darkred/50 rounded hover:bg-darkred/70 text-sm">Edit</button>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                        <h3 className="font-cinzel text-gold mb-4">Equipped Gear</h3>
-                        <div className="space-y-3">
-                            {gearSlots.map(({ key, label }) => (
-                                <div key={key} className="bg-charcoal rounded p-3">
-                                    <div className="text-xs text-gray-500 mb-1">{label}</div>
-                                    {isEditing ? (
-                                        <div className="space-y-2">
-                                            <input
-                                                type="text"
-                                                value={editGear[key]?.name || ''}
-                                                onChange={(e) => updateGearSlot(key, 'name', e.target.value)}
-                                                placeholder="Item name"
-                                                className="w-full bg-slate border border-gray-700 rounded px-2 py-1 text-sm"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={editGear[key]?.stats || ''}
-                                                onChange={(e) => updateGearSlot(key, 'stats', e.target.value)}
-                                                placeholder="Stats"
-                                                className="w-full bg-slate border border-gray-700 rounded px-2 py-1 text-sm"
-                                            />
-                                            <input
-                                                type="text"
-                                                value={editGear[key]?.notes || ''}
-                                                onChange={(e) => updateGearSlot(key, 'notes', e.target.value)}
-                                                placeholder="Notes"
-                                                className="w-full bg-slate border border-gray-700 rounded px-2 py-1 text-sm"
-                                            />
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <div className="text-gold">{activeProfile.gear[key]?.name || 'Empty'}</div>
-                                            <div className="text-sm text-gray-400">{activeProfile.gear[key]?.stats}</div>
-                                            {activeProfile.gear[key]?.notes && (
-                                                <div className="text-xs text-ember mt-1">{activeProfile.gear[key].notes}</div>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-cinzel text-gold">Skill Loadout</h3>
-                            {isEditing && (
-                                <button onClick={addSkill} className="px-3 py-1 bg-gold/20 text-gold rounded text-sm hover:bg-gold/30">+ Add Skill</button>
-                            )}
-                        </div>
-                        <div className="space-y-2">
-                            {(isEditing ? editSkills : activeProfile.skillLoadout).map((skill, i) => (
-                                <div key={i} className="bg-charcoal rounded p-3 flex items-start gap-3">
-                                    {isEditing ? (
-                                        <>
-                                            <div className="flex-1 space-y-2">
-                                                <input
-                                                    type="text"
-                                                    value={skill.name}
-                                                    onChange={(e) => updateSkill(i, 'name', e.target.value)}
-                                                    className="w-full bg-slate border border-gray-700 rounded px-2 py-1 text-sm"
-                                                />
-                                                <input
-                                                    type="text"
-                                                    value={skill.description}
-                                                    onChange={(e) => updateSkill(i, 'description', e.target.value)}
-                                                    className="w-full bg-slate border border-gray-700 rounded px-2 py-1 text-sm"
-                                                />
-                                            </div>
-                                            <button onClick={() => removeSkill(i)} className="text-red-400 hover:text-red-300 text-sm">✕</button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <span className="text-gold">{skill.name}</span>
-                                            <span className="text-gray-400 text-sm">— {skill.description}</span>
-                                        </>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                        <h3 className="font-cinzel text-gold mb-3">Combat Rotation</h3>
-                        <p className="text-sm text-gray-300">{activeProfile.combatRotation}</p>
-                    </div>
                 </div>
             );
         };
@@ -1692,65 +1080,23 @@ Return JSON:
 
             const lastUpdate = activeProfile.lastMetaUpdate ? new Date(activeProfile.lastMetaUpdate) : null;
             const daysSinceUpdate = lastUpdate ? Math.floor((Date.now() - lastUpdate) / (1000 * 60 * 60 * 24)) : null;
-            const isStale = daysSinceUpdate === null || daysSinceUpdate > 21;
 
             const refreshMeta = async () => {
-                if (!apiKey) {
-                    setError('Please enter your API key in the Profile tab');
-                    return;
-                }
-
+                if (!apiKey) { setError('Please enter your API key in the Profile tab'); return; }
                 setIsLoading(true);
                 setError('');
 
                 try {
-                    const gameQuery = activeProfile.game === 'Orna: The GPS RPG' ? 'Orna GPS RPG' : 'Hero of Aethric';
-                    const classQuery = activeProfile.classSpec.split('·')[0].trim();
+                    const query = `Search for: ${activeProfile.game} ${activeProfile.classSpec} T${activeProfile.tier} ${activeProfile.playstyle} build guide patch notes 2024 2025. Check: blog.ornarpg.com, r/OrnaRPG, playorna.com/releases. Return: recent changes, tier list position, recommended gear/skills.`;
+                    const response = await callClaudeAPI(apiKey, query, true);
 
-                    const searchQuery = `${gameQuery} ${classQuery} T${activeProfile.tier} build guide patch notes 2024 2025`;
-
-                    const characterSpecific = activeProfile.name === 'Biffius'
-                        ? 'Also search for: Spiked Shield mechanics, Gilgamesh build, tank raid builds'
-                        : 'Also search for: Weaved Elemancy, Omnimancer build, mage flask system';
-
-                    const systemPrompt = `You are a game meta analyst for ${activeProfile.game}. Search for recent patch notes, tier lists, and build discussions. Focus on T${activeProfile.tier} ${activeProfile.playstyle} builds. Priority sources: blog.ornarpg.com, r/OrnaRPG, r/HeroOfAethric, playorna.com/releases.`;
-
-                    const messages = [{
-                        role: 'user',
-                        content: `Search for the latest meta information for my character:
-
-Game: ${activeProfile.game}
-Class: ${activeProfile.classSpec}
-Tier: ${activeProfile.tier}
-Playstyle: ${activeProfile.playstyle}
-Endgame Target: ${activeProfile.endgameTarget}
-
-${characterSpecific}
-
-Search for:
-1. Recent patch notes affecting this class/playstyle
-2. Current tier list standings for T${activeProfile.tier}
-3. Community build discussions and recommendations
-4. Any changes to key mechanics (${activeProfile.name === 'Biffius' ? 'Spiked Shield, tank mechanics' : 'Weaved Elemancy, mage flask'})
-5. New T${activeProfile.tier} gear worth farming
-
-Return a dated summary of what's changed and any recommendations.`
-                    }];
-
-                    const response = await callClaudeAPI(apiKey, messages, systemPrompt, false, true);
-
-                    let textContent = '';
+                    let text = '';
                     for (const block of response.content) {
-                        if (block.type === 'text') {
-                            textContent += block.text;
-                        }
+                        if (block.type === 'text') text += block.text;
                     }
 
-                    setMetaResults(textContent);
-                    updateProfile({
-                        metaNotes: textContent,
-                        lastMetaUpdate: new Date().toISOString()
-                    });
+                    setMetaResults(text);
+                    updateProfile({ metaNotes: text, lastMetaUpdate: new Date().toISOString() });
                 } catch (err) {
                     setError(err.message);
                 } finally {
@@ -1759,74 +1105,28 @@ Return a dated summary of what's changed and any recommendations.`
             };
 
             return (
-                <div className="space-y-6">
+                <div className="space-y-6 pb-20 md:pb-0">
                     <div className="flex justify-between items-center">
                         <h2 className="font-cinzel text-xl text-gold">Meta Refresh</h2>
-                        <button
-                            onClick={refreshMeta}
-                            disabled={isLoading}
-                            className="px-4 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50 flex items-center gap-2"
-                        >
-                            {isLoading ? (
-                                <>
-                                    <span className="w-4 h-4 border-2 border-gold border-t-transparent rounded-full animate-spin"></span>
-                                    Searching...
-                                </>
-                            ) : (
-                                <>🔄 Refresh Meta</>
-                            )}
+                        <button onClick={refreshMeta} disabled={isLoading}
+                            className="px-4 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50">
+                            {isLoading ? 'Searching...' : 'Refresh Meta'}
                         </button>
                     </div>
 
-                    {isStale && (
-                        <div className="bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-4 text-yellow-400">
-                            ⚠️ Meta data is {daysSinceUpdate === null ? 'not available' : `${daysSinceUpdate} days old`}. Consider refreshing for the latest information.
+                    {(daysSinceUpdate === null || daysSinceUpdate > 21) && (
+                        <div className="bg-yellow-900/30 border border-yellow-700/50 rounded-lg p-3 text-yellow-400 text-sm">
+                            Meta data is {daysSinceUpdate === null ? 'not available' : `${daysSinceUpdate} days old`}. Consider refreshing.
                         </div>
                     )}
 
                     <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                        <div className="flex justify-between items-center mb-3">
-                            <h3 className="font-cinzel text-gold">Character Focus</h3>
-                            <span className="text-xs text-gray-500">
-                                {lastUpdate ? `Last updated: ${lastUpdate.toLocaleDateString()}` : 'Never updated'}
-                            </span>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div><span className="text-gray-500">Class:</span> {activeProfile.classSpec}</div>
+                            <div><span className="text-gray-500">Target:</span> {activeProfile.endgameTarget}</div>
+                            <div><span className="text-gray-500">Playstyle:</span> {activeProfile.playstyle}</div>
+                            <div><span className="text-gray-500">Last update:</span> {lastUpdate?.toLocaleDateString() || 'Never'}</div>
                         </div>
-                        <div className="grid md:grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <span className="text-gray-400">Class:</span> <span className="text-white">{activeProfile.classSpec}</span>
-                            </div>
-                            <div>
-                                <span className="text-gray-400">Target:</span> <span className="text-white">{activeProfile.endgameTarget}</span>
-                            </div>
-                            <div>
-                                <span className="text-gray-400">Playstyle:</span> <span className="text-white">{activeProfile.playstyle}</span>
-                            </div>
-                            <div>
-                                <span className="text-gray-400">Tier:</span> <span className="text-white">T{activeProfile.tier}</span>
-                            </div>
-                        </div>
-
-                        {activeProfile.name === 'Biffius' && (
-                            <div className="mt-4 p-3 bg-darkred/20 rounded text-sm">
-                                <strong className="text-gold">Key Mechanics to Track:</strong>
-                                <ul className="mt-2 space-y-1 text-gray-300">
-                                    <li>• Spiked Shield mechanics and scaling</li>
-                                    <li>• Tank viability in current raid meta</li>
-                                    <li>• Defense/Ward breakpoints for T7</li>
-                                </ul>
-                            </div>
-                        )}
-
-                        {activeProfile.name === 'Spiffius' && (
-                            <div className="mt-4 p-3 bg-darkred/20 rounded text-sm">
-                                <strong className="text-gold">Key Mechanics to Track:</strong>
-                                <ul className="mt-2 space-y-1 text-gray-300">
-                                    <li>• Weaved Elemancy damage bonuses</li>
-                                    <li>• Mage flask system changes</li>
-                                    <li>• Omnimancer requirements and viability</li>
-                                </ul>
-                            </div>
-                        )}
                     </div>
 
                     {isLoading && <LoadingSpinner message="Searching the meta..." />}
@@ -1834,30 +1134,17 @@ Return a dated summary of what's changed and any recommendations.`
 
                     {(metaResults || activeProfile.metaNotes) && (
                         <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                            <h3 className="font-cinzel text-gold mb-3">What's Changed</h3>
-                            <div className="prose prose-invert prose-sm max-w-none">
-                                <div className="whitespace-pre-wrap text-sm text-gray-300">
-                                    {metaResults || activeProfile.metaNotes}
-                                </div>
-                            </div>
+                            <h3 className="font-cinzel text-gold mb-3">Latest Meta</h3>
+                            <div className="whitespace-pre-wrap text-sm text-gray-300">{metaResults || activeProfile.metaNotes}</div>
                         </div>
                     )}
 
                     <div className="bg-slate/30 border border-darkred/20 rounded-lg p-4">
-                        <h3 className="font-cinzel text-gold mb-3">Priority Sources</h3>
-                        <div className="grid md:grid-cols-2 gap-3 text-sm">
-                            <a href="https://blog.ornarpg.com" target="_blank" rel="noopener" className="flex items-center gap-2 text-gray-300 hover:text-gold">
-                                🔗 blog.ornarpg.com
-                            </a>
-                            <a href="https://playorna.com/releases" target="_blank" rel="noopener" className="flex items-center gap-2 text-gray-300 hover:text-gold">
-                                🔗 playorna.com/releases
-                            </a>
-                            <a href="https://reddit.com/r/OrnaRPG" target="_blank" rel="noopener" className="flex items-center gap-2 text-gray-300 hover:text-gold">
-                                🔗 r/OrnaRPG
-                            </a>
-                            <a href="https://reddit.com/r/HeroOfAethric" target="_blank" rel="noopener" className="flex items-center gap-2 text-gray-300 hover:text-gold">
-                                🔗 r/HeroOfAethric
-                            </a>
+                        <h3 className="font-cinzel text-gold mb-3">Resources</h3>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                            {['blog.ornarpg.com', 'playorna.com/releases', 'reddit.com/r/OrnaRPG', 'reddit.com/r/HeroOfAethric'].map(url => (
+                                <a key={url} href={`https://${url}`} target="_blank" rel="noopener" className="text-gray-400 hover:text-gold">🔗 {url}</a>
+                            ))}
                         </div>
                     </div>
                 </div>
@@ -1866,77 +1153,14 @@ Return a dated summary of what's changed and any recommendations.`
 
         // ============ MAIN APP ============
         const App = () => {
-            const { activeTab, setActiveTab, apiKey, activeProfile, addEvaluation } = useContext(AppContext);
-            const [fabLoading, setFabLoading] = useState(false);
-            const [fabResult, setFabResult] = useState(null);
-            const [fabError, setFabError] = useState('');
-            const [showFabModal, setShowFabModal] = useState(false);
-
-            const handleFabFileSelect = async (file) => {
-                if (!apiKey) {
-                    setFabError('Please enter your API key in the Profile tab first');
-                    setShowFabModal(true);
-                    return;
-                }
-
-                setFabLoading(true);
-                setFabError('');
-                setFabResult(null);
-                setShowFabModal(true);
-
-                try {
-                    const reader = new FileReader();
-                    reader.onload = async (e) => {
-                        const imageData = e.target.result;
-                        const base64Data = imageData.split(',')[1];
-                        const mediaType = imageData.split(';')[0].split(':')[1];
-
-                        const systemPrompt = buildSystemPrompt(activeProfile);
-                        const messages = [{
-                            role: 'user',
-                            content: [
-                                { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
-                                { type: 'text', text: `Extract all visible stats from this gear screenshot and evaluate it for my build. Return your response as JSON with this structure:
-{
-  "item_name": "string",
-  "extracted_stats": { "tier": number, "slot": "string", "quality": "string", "level": number, "attack": number, "defense": number, "resistance": number, "hp": number, "mana": number, "ward": number, "magic": number, "dexterity": number, "foresight": number, "element": "string", "ability": "string", "useableBy": "string" },
-  "verdict": "Upgrade|Sidegrade|Downgrade|Wrong class|Situational",
-  "color_rating": "green|yellow|red",
-  "stat_comparison": [{"stat": "string", "current": number, "new": number, "change": "string"}],
-  "synergy_analysis": "string",
-  "flags": ["string"],
-  "ability_analysis": "string",
-  "upgrade_priority": number,
-  "rationale": "string"
-}` }
-                            ]
-                        }];
-
-                        const response = await callClaudeAPI(apiKey, messages, systemPrompt, true);
-                        let textContent = response.content.find(c => c.type === 'text')?.text || '';
-                        const jsonMatch = textContent.match(/\{[\s\S]*\}/);
-                        if (jsonMatch) {
-                            const parsed = JSON.parse(jsonMatch[0]);
-                            setFabResult(parsed);
-                            addEvaluation({ type: 'gear', ...parsed });
-                        } else {
-                            setFabResult({ rationale: textContent, verdict: 'Unknown', color_rating: 'yellow' });
-                        }
-                        setFabLoading(false);
-                    };
-                    reader.readAsDataURL(file);
-                } catch (err) {
-                    setFabError(err.message);
-                    setFabLoading(false);
-                }
-            };
+            const { activeTab } = useContext(AppContext);
 
             const renderTab = () => {
                 switch (activeTab) {
                     case 'profile': return <ProfileTab />;
+                    case 'loadout': return <LoadoutTab />;
                     case 'gear': return <GearTab />;
                     case 'skills': return <SkillsTab />;
-                    case 'loadout': return <LoadoutTab />;
                     case 'meta': return <MetaTab />;
                     default: return <ProfileTab />;
                 }
@@ -1946,75 +1170,7 @@ Return a dated summary of what's changed and any recommendations.`
                 <div className="min-h-screen bg-charcoal pb-20 md:pb-0">
                     <Header />
                     <TabNav />
-                    <main className="max-w-6xl mx-auto px-4 py-6">
-                        {renderTab()}
-                    </main>
-                    <footer className="border-t border-darkred/30 py-4 text-center text-xs text-gray-500 mb-16 md:mb-0">
-                        AethricAdvisor - Build-aware gear and skill optimizer
-                    </footer>
-
-                    {/* Floating Action Button */}
-                    <FloatingActionButton onFileSelect={handleFabFileSelect} />
-
-                    {/* FAB Quick Evaluation Modal */}
-                    {showFabModal && (
-                        <div className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4" onClick={() => !fabLoading && setShowFabModal(false)}>
-                            <div className="bg-charcoal border border-darkred/50 rounded-lg p-4 max-w-md w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                                <div className="flex justify-between items-center mb-4">
-                                    <h3 className="font-cinzel text-gold">Quick Evaluation</h3>
-                                    {!fabLoading && (
-                                        <button onClick={() => setShowFabModal(false)} className="text-gray-400 hover:text-white text-xl">&times;</button>
-                                    )}
-                                </div>
-
-                                {fabLoading && <LoadingSpinner message="Analyzing screenshot..." />}
-
-                                {fabError && (
-                                    <div className="bg-red-900/30 border border-red-700/50 rounded p-3 text-red-400 text-sm">
-                                        {fabError}
-                                    </div>
-                                )}
-
-                                {fabResult && (
-                                    <div className="space-y-3">
-                                        <div className="flex items-center justify-between flex-wrap gap-2">
-                                            <span className="font-medium">{fabResult.item_name}</span>
-                                            <VerdictBadge verdict={fabResult.verdict} color={fabResult.color_rating} />
-                                        </div>
-
-                                        {fabResult.flags?.length > 0 && (
-                                            <div className="flex flex-wrap gap-1">
-                                                {fabResult.flags.map((flag, i) => (
-                                                    <span key={i} className="px-2 py-0.5 bg-darkred/30 text-xs rounded">{flag}</span>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        {fabResult.synergy_analysis && (
-                                            <p className="text-sm text-gray-300">{fabResult.synergy_analysis}</p>
-                                        )}
-
-                                        {fabResult.rationale && (
-                                            <p className="text-sm text-gray-400 border-t border-gray-700 pt-2">{fabResult.rationale}</p>
-                                        )}
-
-                                        <div className="flex gap-2 pt-2">
-                                            <CopyButton
-                                                text={`${fabResult.item_name || 'Item'}\nVerdict: ${fabResult.verdict}${fabResult.flags?.length ? '\nFlags: ' + fabResult.flags.join(', ') : ''}${fabResult.synergy_analysis ? '\n' + fabResult.synergy_analysis : ''}${fabResult.rationale ? '\n\n' + fabResult.rationale : ''}`}
-                                                label="Copy Result"
-                                            />
-                                            <button
-                                                onClick={() => { setActiveTab('gear'); setShowFabModal(false); }}
-                                                className="px-3 py-1.5 text-xs bg-slate hover:bg-gray-700 rounded text-gray-300"
-                                            >
-                                                Go to Gear Tab
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
+                    <main className="max-w-6xl mx-auto px-4 py-6">{renderTab()}</main>
                 </div>
             );
         };
