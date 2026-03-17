@@ -81,7 +81,7 @@
         const LOADING_MESSAGES = ["Consulting the Codex...", "Analyzing the runes...", "Comparing stats..."];
 
         const EMPTY_GEAR = {
-            name: '', quality: 'Legendary', tier: 'T7', level: 1, slot: 'Weapon', useableBy: 'All Classes',
+            name: '', quality: 'Legendary', tier: 'T7', level: '', slot: 'Weapon', useableBy: 'All Classes',
             element: 'None', abilityName: '', abilityDesc: '',
             stats: { attack: 0, defense: 0, resistance: 0, hp: 0, mana: 0, ward: 0, magic: 0, dexterity: 0, foresight: 0, crit: 0 },
             statMods: { attack: '+', defense: '+', resistance: '+', hp: '+', mana: '+', ward: '+', magic: '+', dexterity: '+', foresight: '+', crit: '+' },
@@ -429,9 +429,13 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
                             <label className="block text-xs text-gray-500 mb-1">Level (1-10)</label>
-                            <input type="number" inputMode="numeric" min="1" max="10" value={gear.level}
-                                onChange={(e) => setGear(prev => ({ ...prev, level: Math.min(10, Math.max(1, parseInt(e.target.value) || 1)) }))}
-                                className="w-full bg-charcoal border border-gray-700 rounded px-2 py-2 text-sm" />
+                            <input type="number" inputMode="numeric" min="1" max="10" step="1" value={gear.level}
+                                onChange={(e) => setGear(prev => ({ ...prev, level: e.target.value === '' ? '' : parseInt(e.target.value) }))}
+                                placeholder="1-10"
+                                className={`w-full bg-charcoal border rounded px-2 py-2 text-sm ${gear.level !== '' && (gear.level < 1 || gear.level > 10) ? 'border-red-500' : 'border-gray-700'}`} />
+                            {gear.level !== '' && (gear.level < 1 || gear.level > 10) && (
+                                <p className="text-red-400 text-xs mt-1">Level must be between 1 and 10</p>
+                            )}
                         </div>
                         <div>
                             <label className="block text-xs text-gray-500 mb-1">Slot</label>
@@ -514,7 +518,7 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
                     </div>
 
                     {onSubmit && (
-                        <button onClick={onSubmit} disabled={isLoading || !gear.name}
+                        <button onClick={onSubmit} disabled={isLoading || !gear.name || gear.level === '' || gear.level < 1 || gear.level > 10}
                             className="w-full py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50">
                             {isLoading ? 'Evaluating...' : submitLabel}
                         </button>
@@ -814,7 +818,9 @@ Return JSON only: {"verdict":"Must Have|Strong|Situational|Skip","color":"green|
                                 </div>
                                 <GearForm gear={tempGear} setGear={setTempGear} />
                                 <div className="flex gap-2 mt-4">
-                                    <button onClick={saveGear} className="flex-1 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30">Save to Loadout</button>
+                                    <button onClick={saveGear}
+                                        disabled={!tempGear.name || tempGear.level === '' || tempGear.level < 1 || tempGear.level > 10}
+                                        className="flex-1 py-2 bg-gold/20 text-gold rounded hover:bg-gold/30 disabled:opacity-50">Save to Loadout</button>
                                     <button onClick={() => setEditingSlot(null)} className="px-4 py-2 bg-gray-700 rounded">Cancel</button>
                                 </div>
                             </div>
